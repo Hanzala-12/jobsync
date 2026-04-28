@@ -8,6 +8,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688.svg)](https://fastapi.tiangolo.com)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![GitHub stars](https://img.shields.io/github/stars/Hanzala-12/jobsync?style=social)](https://github.com/Hanzala-12/jobsync)
 
 An AI-powered job search assistant that helps you find jobs, analyze resumes, track applications, generate cover letters, and prepare for interviews. JobSync streamlines your job search process with intelligent automation and insights.
 
@@ -51,7 +52,7 @@ An AI-powered job search assistant that helps you find jobs, analyze resumes, tr
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/jobsync.git
+   git clone https://github.com/Hanzala-12/jobsync.git
    cd jobsync
    ```
 
