@@ -20,19 +20,19 @@ An AI-powered job search assistant that helps you find jobs, analyze resumes, tr
 
 ## Features
 
-✨ **Resume Analysis** - Upload your resume and get ATS score, missing keywords, and improvement tips
+**Resume Analysis** - Upload your resume and get ATS score, missing keywords, and improvement tips
 
-🔍 **Job Search** - Search jobs from multiple sources (RemoteOK, Arbeitnow, Adzuna)
+**Job Search** - Search jobs from multiple sources (RemoteOK, Arbeitnow, Adzuna)
 
-🎯 **Job Matching** - AI-powered matching between your resume and job descriptions
+**Job Matching** - AI-powered matching between your resume and job descriptions
 
-📊 **Application Tracking** - Track your job applications with status updates
+**Application Tracking** - Track your job applications with status updates
 
-✍️ **Cover Letter Generation** - Generate tailored cover letters using AI
+**Cover Letter Generation** - Generate tailored cover letters using AI
 
-📈 **Skill Gap Analysis** - Identify missing skills based on job descriptions
+**Skill Gap Analysis** - Identify missing skills based on job descriptions
 
-💼 **Interview Prep** - Get AI-generated interview questions and suggested answers
+**Interview Prep** - Get AI-generated interview questions and suggested answers
 
 ## Tech Stack
 
@@ -88,7 +88,7 @@ An AI-powered job search assistant that helps you find jobs, analyze resumes, tr
    - API: http://localhost:8000
    - Interactive docs: http://localhost:8000/docs
 
-📖 For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md)
+For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md)
 
 ## API Endpoints
 
@@ -194,13 +194,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 If you find JobSync helpful, please consider:
-- ⭐ Starring the repository
-- 🐛 Reporting bugs
-- 💡 Suggesting new features
-- 🤝 Contributing to the project
+- Starring the repository
+- Reporting bugs
+- Suggesting new features
+- Contributing to the project
 
 ---
 
 <div align="center">
-Made with ❤️ for job seekers everywhere
+Built for job seekers worldwide
 </div>

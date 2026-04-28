@@ -97,4 +97,4 @@ Examples:
 
 Feel free to open an issue with your question or reach out to the maintainers.
 
-Thank you for contributing to JobSync! 🚀
+Thank you for contributing to JobSync!

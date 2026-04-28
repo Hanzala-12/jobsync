@@ -83,7 +83,7 @@ Open your browser and go to:
 If you get import errors, make sure you're running the server from the project root directory and your virtual environment is activated.
 
 ### Database Errors
-The SQLite database is created automatically. If you have issues, delete `job_copilot.db` and restart the server.
+The SQLite database is created automatically. If you have issues, delete `jobsync.db` and restart the server.
 
 ### API Key Errors
 Make sure your `.env` file is in the root directory (not in the backend folder) and contains a valid Groq API key.
