@@ -51,3 +51,26 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Agent input/output folders (keep structure, ignore content)
+input_jobs/*.txt
+input_jobs/*.pdf
+input_resumes/*.txt
+input_resumes/*.pdf
+input_kb/*.txt
+input_kb/*.pdf
+outputs/*.txt
+outputs/*.pdf
+tracker/*.csv
+tracker/*.txt
+tracker/*.json
+
+# Keep sample files
+!samples/*.txt
+!samples/*.pdf
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
