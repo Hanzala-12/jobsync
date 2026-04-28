@@ -1,6 +1,66 @@
 # Quick Start Guide
 
-## 1. Install Python Dependencies
+## Prerequisites
+
+- Python 3.8+ installed
+- Node.js 16+ installed
+- Groq API key (free from https://console.groq.com)
+
+## Option 1: Complete Setup (Backend + Frontend)
+
+### 1. Install All Dependencies
+
+```bash
+bash setup-all.sh
+```
+
+This will:
+- Create Python virtual environment
+- Install backend dependencies
+- Install frontend dependencies
+- Create .env files
+
+### 2. Configure Environment
+
+Edit the `.env` file in the root directory and add your Groq API key:
+
+```
+GROQ_API_KEY=gsk_your_actual_key_here
+ADZUNA_APP_ID=optional
+ADZUNA_APP_KEY=optional
+```
+
+### 3. Run Both Servers
+
+```bash
+bash run-all.sh
+```
+
+Or run them separately:
+
+**Terminal 1 - Backend:**
+```bash
+source venv/Scripts/activate  # Windows Git Bash
+bash run.sh
+```
+
+**Terminal 2 - Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+
+### 4. Access the Application
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+## Option 2: Backend Only Setup
+
+## Option 2: Backend Only Setup
+
+### 1. Install Python Dependencies
 
 First, make sure you have Python 3.8+ installed. Then run:
 
@@ -49,7 +109,7 @@ Open your browser and go to:
 - **API Documentation**: http://localhost:8000/docs
 - **API Root**: http://localhost:8000
 
-## 6. Try It Out
+## 6. Try It Out (API Only)
 
 ### Upload a Resume
 1. Go to http://localhost:8000/docs
