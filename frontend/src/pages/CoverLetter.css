@@ -1,0 +1,22 @@
+.cover-letter-page {
+  max-width: 900px;
+}
+
+.cover-letter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.cover-letter-output {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.cover-letter-output pre {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  color: var(--text);
+  font-family: inherit;
+}

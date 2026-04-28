@@ -1,0 +1,46 @@
+.interview-page {
+  max-width: 900px;
+}
+
+.interview-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.question-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.question-text {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.answer-section {
+  padding: 1rem;
+  background: var(--background);
+  border-radius: 0.5rem;
+}
+
+.answer-section h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.answer-text {
+  color: var(--text);
+  line-height: 1.6;
+}

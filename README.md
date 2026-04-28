@@ -36,10 +36,19 @@ An AI-powered job search assistant that helps you find jobs, analyze resumes, tr
 
 ## Tech Stack
 
-- **Backend**: FastAPI (Python)
-- **Database**: SQLite
-- **AI**: Groq API (free tier with Llama 3)
-- **PDF Processing**: PyMuPDF
+**Backend**
+- FastAPI (Python)
+- SQLAlchemy ORM
+- SQLite Database
+- Groq API (AI)
+- PyMuPDF (PDF Processing)
+
+**Frontend**
+- React 18
+- Vite
+- React Router
+- Axios
+- Lucide React (Icons)
 
 ## Quick Start
 
@@ -79,14 +88,22 @@ An AI-powered job search assistant that helps you find jobs, analyze resumes, tr
    ADZUNA_APP_KEY=optional
    ```
 
-5. **Run the server**
+5. **Run the backend**
    ```bash
    bash run.sh
    ```
 
-6. **Access the API**
-   - API: http://localhost:8000
-   - Interactive docs: http://localhost:8000/docs
+6. **Run the frontend** (in a new terminal)
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+7. **Access the application**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API docs: http://localhost:8000/docs
 
 For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md)
 
