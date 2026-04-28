@@ -1,0 +1,51 @@
+Junior AI Engineer Intern
+ABC Tech Solutions
+
+Location: Remote / Hybrid
+Duration: 3-6 months
+Stipend: Competitive
+
+About the Role:
+We are seeking a motivated Junior AI Engineer Intern to join our machine learning team. You will work on real-world AI projects, contribute to model development, and gain hands-on experience with cutting-edge technologies.
+
+Responsibilities:
+- Assist in developing and training machine learning models
+- Perform data preprocessing and feature engineering
+- Collaborate with senior engineers on AI projects
+- Document code and maintain project repositories on GitHub
+- Participate in code reviews and team meetings
+- Research and implement new ML algorithms
+
+Required Skills:
+- Python programming
+- Basic understanding of machine learning concepts
+- Familiarity with data preprocessing techniques
+- Git and GitHub for version control
+- Problem-solving and analytical thinking
+- Good communication skills
+
+Preferred Skills:
+- Experience with pandas, numpy, scikit-learn
+- Knowledge of deep learning frameworks (TensorFlow/PyTorch)
+- SQL database knowledge
+- Jupyter notebooks experience
+- API development with Flask or FastAPI
+- Understanding of prompt engineering for LLMs
+
+Qualifications:
+- Currently pursuing or recently completed degree in Computer Science, AI, or related field
+- Strong academic record
+- Portfolio of projects (GitHub repositories preferred)
+- Passion for AI and machine learning
+
+What We Offer:
+- Mentorship from experienced AI engineers
+- Real-world project experience
+- Flexible working hours
+- Certificate of completion
+- Potential for full-time conversion
+
+How to Apply:
+Send your resume, GitHub profile, and a brief cover letter explaining your interest in AI.
+
+ABC Tech Solutions is an equal opportunity employer.

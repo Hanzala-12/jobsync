@@ -1,223 +1,248 @@
-# JobSync
+# CareerPrep Job-Hunting Agent
 
-<div align="center">
+A file-driven AI agent for job search, resume tailoring, interview preparation, and application tracking. Enhanced with Groq LLM for intelligent analysis.
 
-**Sync yourself with your dream job.**
+## GAME Framework
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688.svg)](https://fastapi.tiangolo.com)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![GitHub stars](https://img.shields.io/github/stars/Hanzala-12/jobsync?style=social)](https://github.com/Hanzala-12/jobsync)
+**Goal**: Help students search for jobs, analyze job posters, tailor resumes, generate interview questions, and track applications.
 
-An AI-powered job search assistant that helps you find jobs, analyze resumes, track applications, generate cover letters, and prepare for interviews. JobSync streamlines your job search process with intelligent automation and insights.
+**Actions**:
+- Read job posters, resumes, and knowledge base files
+- Analyze job requirements using LLM and keyword matching
+- Calculate skill gaps and match percentages
+- Generate tailored resume suggestions
+- Create interview questions from KB material
+- Track application status with reminders
+- Generate cover letters and LinkedIn messages
 
-[Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Contributing](#contributing)
+**Memory**:
+- Session memory stored in `tracker/memory.json`
+- Application history in `tracker/applications.csv`
+- Generated reports in `outputs/`
 
-</div>
-
----
+**Environment**:
+- Local file-based system
+- Groq LLM API for intelligent analysis
+- GitHub repository for version control
 
 ## Features
 
-**Resume Analysis** - Upload your resume and get ATS score, missing keywords, and improvement tips
+### Core Features (Professor Requirements)
+- File reading from `input_jobs/`, `input_resumes/`, `input_kb/`
+- Job description analysis with keyword extraction
+- Resume analysis and skill extraction
+- Skill-gap calculation with match percentage
+- Tailored resume improvement suggestions
+- Interview question generation from KB
+- Application tracker with status management
+- Reminder system with date-based logic
 
-**Job Search** - Search jobs from multiple sources (RemoteOK, Arbeitnow, Adzuna)
+### Unique Features (Extra Marks)
+1. **PDF Support** - Read PDF files for jobs, resumes, and KB material
+2. **LLM Integration** - Groq API for intelligent analysis (not just keywords)
+3. **Cover Letter Generator** - AI-generated tailored cover letters
+4. **LinkedIn Message Generator** - Professional outreach messages
+5. **Application Dashboard** - Visual status breakdown with percentages
+6. **Reminder Urgency** - TODAY/TOMORROW/THIS WEEK/OVERDUE flags
+7. **PDF Export** - Export final report as PDF
+8. **JSON Memory** - GAME framework memory system
+9. **Interactive Menu** - User-friendly CLI interface
+10. **Web API** - Bonus FastAPI backend (existing JobSync features)
 
-**Job Matching** - AI-powered matching between your resume and job descriptions
+## Setup
 
-**Application Tracking** - Track your job applications with status updates
+### 1. Install Dependencies
 
-**Cover Letter Generation** - Generate tailored cover letters using AI
+```bash
+pip install -r requirements.txt
+```
 
-**Skill Gap Analysis** - Identify missing skills based on job descriptions
+### 2. Configure Environment
 
-**Interview Prep** - Get AI-generated interview questions and suggested answers
+Create a `.env` file in the root directory:
 
-## Tech Stack
+```
+GROQ_API_KEY=your_groq_api_key_here
+```
 
-**Backend**
-- FastAPI (Python)
-- SQLAlchemy ORM
-- SQLite Database
-- Groq API (AI)
-- PyMuPDF (PDF Processing)
+Get a free Groq API key from: https://console.groq.com
 
-**Frontend**
-- React 18
-- Vite
-- React Router
-- Axios
-- Lucide React (Icons)
+### 3. Prepare Input Files
 
-## Quick Start
+Add files to the input folders:
 
-### Prerequisites
+**input_jobs/**
+- Add job posters or descriptions as `.txt` or `.pdf` files
+- Example: `job_poster_01.txt`, `internship_ad.pdf`
 
-- Python 3.8 or higher
-- Groq API key (free from [console.groq.com](https://console.groq.com))
+**input_resumes/**
+- Add your resume as `.txt` or `.pdf` file
+- Example: `my_resume.txt`
 
-### Installation
+**input_kb/**
+- Add course slides, interview prep notes as `.txt` or `.pdf`
+- Example: `interview_prep_notes.txt`, `course_slides.pdf`
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Hanzala-12/jobsync.git
-   cd jobsync
-   ```
+### 4. Run the Agent
 
-2. **Run the setup script**
-   ```bash
-   bash setup.sh
-   ```
+```bash
+python app.py
+```
 
-3. **Activate the virtual environment**
-   ```bash
-   # Windows (Git Bash)
-   source venv/Scripts/activate
-   
-   # Linux/Mac
-   source venv/bin/activate
-   ```
+## Usage
 
-4. **Configure environment variables**
-   
-   Edit `.env` file and add your Groq API key:
-   ```env
-   GROQ_API_KEY=gsk_your_actual_key_here
-   ADZUNA_APP_ID=optional
-   ADZUNA_APP_KEY=optional
-   ```
+The agent provides an interactive menu:
 
-5. **Run the backend**
-   ```bash
-   bash run.sh
-   ```
+1. **Run Full Analysis** - Complete pipeline (job + resume + KB analysis)
+2. **List Job Files** - View available job files
+3. **List Resume Files** - View available resume files
+4. **Add Application** - Add new application to tracker
+5. **Update Application** - Update status, dates, actions
+6. **List Applications** - View all tracked applications
+7. **View Reminders** - See pending actions with urgency
+8. **View Dashboard** - Application status breakdown
+9. **Exit** - Close the agent
 
-6. **Run the frontend** (in a new terminal)
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
+## Output Files
 
-7. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API docs: http://localhost:8000/docs
+All outputs are saved in the `outputs/` and `tracker/` folders:
 
-For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md)
+### outputs/
+- `job_analysis_report.txt` - Job requirements and skills
+- `skill_gap_report.txt` - Match score and missing skills
+- `tailored_resume_suggestions.txt` - Resume improvement tips
+- `interview_questions.txt` - Technical, behavioral, and KB questions
+- `cover_letter.txt` - AI-generated cover letter
+- `linkedin_message.txt` - Professional outreach message
+- `final_agent_report.txt` - Complete analysis report
+- `final_agent_report.pdf` - PDF export (if fpdf installed)
 
-## API Endpoints
+### tracker/
+- `applications.csv` - Application status tracker
+- `reminders.txt` - Pending actions with urgency
+- `memory.json` - Session memory (GAME framework)
 
-### Resume
-- `POST /resume/analyze` - Upload and analyze resume PDF
+## Application Tracker
 
-### Jobs
-- `GET /jobs/search?query=developer` - Search for jobs
-- `GET /jobs/{job_id}/match` - Get AI match score for a job
+The tracker maintains these fields:
 
-### Applications
-- `POST /applications/` - Create new application
-- `GET /applications/` - List all applications
-- `GET /applications/{app_id}` - Get specific application
-- `PATCH /applications/{app_id}/status` - Update application status
+| Field | Description |
+|-------|-------------|
+| application_id | Unique ID (APP-YYYYMMDDHHMMSS) |
+| company | Company name |
+| role | Job title |
+| source | Where job was found |
+| status | Not Applied / Applied / Interview Scheduled / Rejected / Offered |
+| applied_date | Date application submitted |
+| interview_date | Interview date (if scheduled) |
+| follow_up_date | Date to follow up |
+| next_action | What to do next |
+| notes | Additional remarks |
 
-### Cover Letter
-- `POST /cover-letter/generate` - Generate tailored cover letter
+## Reminder System
 
-### Intelligence
-- `POST /intelligence/skill-gap` - Analyze skill gaps
-- `POST /intelligence/interview-prep` - Get interview questions
+Reminders are generated based on application status:
+
+- **Interview Scheduled** → Preparation reminder with urgency
+- **Not Applied** → Reminder to tailor resume and apply
+- **Applied** → Follow-up reminder after 5 days
+- **Urgency Levels**: OVERDUE / TODAY / TOMORROW / THIS WEEK / In X days
+
+## LLM Integration
+
+The agent uses Groq's Llama 3 model for:
+
+- Job requirement extraction and analysis
+- Resume skill identification
+- Intelligent skill-gap calculation
+- Tailored resume suggestions with specific bullet points
+- Interview question generation
+- Cover letter writing
+- LinkedIn message creation
+
+**Fallback**: If LLM is unavailable, uses keyword-based analysis.
 
 ## Project Structure
 
 ```
-jobsync/
-├── backend/
-│   ├── main.py              # FastAPI app entry point
-│   ├── database.py          # Database configuration
-│   ├── models.py            # SQLAlchemy models
-│   ├── schemas.py           # Pydantic schemas
-│   ├── routers/             # API route handlers
-│   │   ├── resume.py
-│   │   ├── jobs.py
-│   │   ├── applications.py
-│   │   ├── cover_letter.py
-│   │   └── intelligence.py
-│   ├── services/            # Business logic
-│   │   ├── ai_client.py     # Groq AI integration
-│   │   ├── job_apis.py      # Job board API integrations
-│   │   └── pdf_parser.py    # PDF text extraction
-│   ├── requirements.txt     # Python dependencies
-│   └── .env.example         # Environment variables template
-├── .env                     # Your environment variables
-├── setup.sh                 # Setup script
-├── run.sh                   # Run script
-└── README.md               # This file
+job-hunting-agent/
+├── app.py                    # Main agent file
+├── requirements.txt          # Dependencies
+├── README.md                 # This file
+├── reflection.md             # Project reflection
+├── .env                      # Environment variables
+│
+├── input_jobs/               # Job posters (add your files here)
+├── input_resumes/            # Resumes (add your files here)
+├── input_kb/                 # Knowledge base (add your files here)
+│
+├── outputs/                  # Generated reports
+├── tracker/                  # Application tracker and memory
+├── samples/                  # Sample files
+│
+├── backend/                  # Bonus: FastAPI web API
+└── frontend/                 # Bonus: React web interface
 ```
 
-## Usage Examples
+## Bonus Features
 
-### 1. Analyze Resume
+This project includes a complete web application (JobSync) with:
+
+- FastAPI backend with REST API
+- React frontend with modern UI
+- Database integration (SQLite)
+- Additional features: job search APIs, real-time analysis
+
+To run the web app:
+
 ```bash
-curl -X POST "http://localhost:8000/resume/analyze" \
-  -F "file=@your_resume.pdf"
+# Backend
+source venv/Scripts/activate
+bash run.sh
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-### 2. Search Jobs
-```bash
-curl "http://localhost:8000/jobs/search?query=python+developer"
-```
+## Testing
 
-### 3. Create Application
-```bash
-curl -X POST "http://localhost:8000/applications/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "company": "Tech Corp",
-    "role": "Software Engineer",
-    "notes": "Applied via LinkedIn"
-  }'
-```
+1. Add sample files to input folders
+2. Run `python app.py`
+3. Choose option 1 (Run Full Analysis)
+4. Check `outputs/` and `tracker/` folders
+5. Add applications using option 4
+6. View reminders using option 7
 
-### 4. Generate Cover Letter
-```bash
-curl -X POST "http://localhost:8000/cover-letter/generate" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "company": "Tech Corp",
-    "role": "Software Engineer",
-    "job_description": "We are looking for..."
-  }'
-```
+## Requirements Met
 
-## Documentation
+- ✅ Folder-based input system
+- ✅ File reading (TXT and PDF)
+- ✅ Job analysis with keyword extraction
+- ✅ Resume analysis
+- ✅ Skill-gap calculation
+- ✅ Resume tailoring suggestions
+- ✅ Interview questions from KB
+- ✅ Application tracker (CSV)
+- ✅ Reminder generation
+- ✅ All required output files
+- ✅ GAME framework implementation
+- ✅ 10+ unique features for extra marks
 
-- [Quick Start Guide](QUICKSTART.md) - Step-by-step setup instructions
-- [Project Structure](PROJECT_STRUCTURE.md) - Detailed architecture overview
-- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute
-- [API Documentation](http://localhost:8000/docs) - Interactive API docs (when running)
+## Technologies
+
+- **Python 3.8+**
+- **Groq API** - LLM integration
+- **PyMuPDF** - PDF reading
+- **FPDF** - PDF export
+- **CSV** - Application tracking
+- **JSON** - Memory system
+
+## Author
+
+Built for Agentic AI course lab assignment.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built with [FastAPI](https://fastapi.tiangolo.com/)
-- AI powered by [Groq](https://groq.com/)
-- Job data from RemoteOK, Arbeitnow, and Adzuna
-
-## Support
-
-If you find JobSync helpful, please consider:
-- Starring the repository
-- Reporting bugs
-- Suggesting new features
-- Contributing to the project
-
----
-
-<div align="center">
-Built for job seekers worldwide
-</div>
+MIT License

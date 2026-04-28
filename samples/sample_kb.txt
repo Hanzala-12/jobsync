@@ -1,0 +1,198 @@
+INTERVIEW PREPARATION NOTES
+Course: Career Development and Professional Skills
+
+===== TECHNICAL INTERVIEW PREPARATION =====
+
+Common Python Questions:
+- Explain the difference between lists and tuples
+- What are decorators in Python?
+- How does memory management work in Python?
+- Explain list comprehensions with examples
+- What is the difference between deep copy and shallow copy?
+
+Data Structures Questions:
+- Explain time complexity of common operations
+- When to use arrays vs linked lists?
+- How does a hash table work?
+- Explain binary search tree operations
+- What is the difference between stack and queue?
+
+Machine Learning Basics:
+- Supervised vs unsupervised learning
+- Explain overfitting and underfitting
+- What is cross-validation?
+- Common evaluation metrics (accuracy, precision, recall, F1)
+- Explain bias-variance tradeoff
+
+Git and Version Control:
+- Basic Git commands (clone, commit, push, pull)
+- What is branching and merging?
+- How to resolve merge conflicts?
+- Best practices for commit messages
+- Explain pull requests and code reviews
+
+===== BEHAVIORAL INTERVIEW PREPARATION =====
+
+STAR Method (Situation, Task, Action, Result):
+Use this framework to answer behavioral questions
+
+Common Behavioral Questions:
+1. Tell me about yourself
+   - Brief background, education, skills
+   - Recent projects and achievements
+   - Career goals and interests
+   - Why interested in this role
+
+2. Why should we hire you?
+   - Highlight relevant skills
+   - Show enthusiasm and cultural fit
+   - Mention specific achievements
+   - Connect your goals with company mission
+
+3. Describe a challenging project
+   - Explain the problem clearly
+   - Your approach and solution
+   - Obstacles faced and how you overcame them
+   - Results and lessons learned
+
+4. How do you handle deadlines?
+   - Time management strategies
+   - Prioritization techniques
+   - Example of meeting tight deadline
+   - How you handle pressure
+
+5. Describe a time you worked in a team
+   - Your role in the team
+   - How you collaborated
+   - Conflict resolution (if any)
+   - Team's achievement
+
+===== PROJECT DISCUSSION TIPS =====
+
+When discussing projects:
+- Start with problem statement
+- Explain your role clearly
+- Discuss technologies used and why
+- Highlight challenges and solutions
+- Mention measurable results
+- Be ready for technical deep-dive
+- Have GitHub links ready
+
+===== COMPANY RESEARCH =====
+
+Before interview, research:
+- Company's products and services
+- Recent news and achievements
+- Company culture and values
+- Tech stack they use
+- Competitors and market position
+
+===== QUESTIONS TO ASK INTERVIEWER =====
+
+Good questions to ask:
+- What does a typical day look like?
+- What projects would I work on?
+- What is the team structure?
+- What are the growth opportunities?
+- What technologies does the team use?
+- What is the onboarding process?
+- What are the biggest challenges facing the team?
+
+===== TECHNICAL SKILLS TO HIGHLIGHT =====
+
+For AI/ML Roles:
+- Python programming proficiency
+- Data preprocessing and cleaning
+- Model training and evaluation
+- Understanding of algorithms
+- Experience with ML libraries
+- Problem-solving approach
+- Documentation skills
+
+For Software Development:
+- Programming language expertise
+- Data structures and algorithms
+- Database knowledge
+- Version control (Git)
+- API development
+- Testing and debugging
+- Code documentation
+
+===== SOFT SKILLS TO EMPHASIZE =====
+
+- Communication (written and verbal)
+- Teamwork and collaboration
+- Problem-solving mindset
+- Adaptability and learning agility
+- Time management
+- Attention to detail
+- Initiative and proactivity
+
+===== COMMON MISTAKES TO AVOID =====
+
+- Not researching the company
+- Speaking negatively about past experiences
+- Being unprepared for technical questions
+- Not asking questions
+- Poor body language (for in-person)
+- Not following up after interview
+- Exaggerating skills or experience
+
+===== FOLLOW-UP BEST PRACTICES =====
+
+After Interview:
+- Send thank-you email within 24 hours
+- Mention specific discussion points
+- Reiterate your interest
+- Keep it brief and professional
+- Connect on LinkedIn (if appropriate)
+
+===== SALARY NEGOTIATION TIPS =====
+
+- Research market rates
+- Know your worth
+- Consider total compensation (not just salary)
+- Be prepared to justify your ask
+- Stay professional and positive
+- Don't accept immediately - ask for time to consider
+
+===== REMOTE INTERVIEW TIPS =====
+
+- Test technology beforehand
+- Ensure good lighting and background
+- Dress professionally
+- Minimize distractions
+- Have notes ready (but don't read)
+- Maintain eye contact with camera
+- Have backup plan for technical issues
+
+===== FINAL CHECKLIST =====
+
+Before Interview:
+☐ Research company thoroughly
+☐ Review job description
+☐ Prepare STAR stories
+☐ Review technical concepts
+☐ Prepare questions to ask
+☐ Test technology (for remote)
+☐ Plan your outfit
+☐ Get good sleep
+
+During Interview:
+☐ Be punctual (5-10 min early)
+☐ Greet professionally
+☐ Listen carefully
+☐ Think before answering
+☐ Ask for clarification if needed
+☐ Show enthusiasm
+☐ Take notes
+☐ Ask your prepared questions
+
+After Interview:
+☐ Send thank-you email
+☐ Reflect on performance
+☐ Note areas for improvement
+☐ Follow up if no response in 1 week
+☐ Continue job search (don't wait)
+
+Remember: Confidence, preparation, and authenticity are key to interview success!

@@ -1,0 +1,81 @@
+JOHN DOE
+Email: john.doe@email.com | Phone: +92-300-1234567
+GitHub: github.com/johndoe | LinkedIn: linkedin.com/in/johndoe
+
+EDUCATION
+Bachelor of Science in Computer Science
+XYZ University, Expected Graduation: June 2026
+CGPA: 3.7/4.0
+
+Relevant Coursework:
+- Data Structures and Algorithms
+- Database Management Systems
+- Object-Oriented Programming
+- Web Development
+- Introduction to Artificial Intelligence
+
+TECHNICAL SKILLS
+Programming Languages: Python, Java, C++, JavaScript
+Web Technologies: HTML, CSS, Flask, React (basic)
+Tools & Technologies: Git, GitHub, Jupyter Notebooks, VS Code
+Databases: MySQL, SQLite
+Libraries: pandas, numpy (basic knowledge)
+Other: Problem-solving, Team collaboration, Documentation
+
+PROJECTS
+
+1. Student Management System (Python, SQLite)
+- Developed a desktop application for managing student records
+- Implemented CRUD operations with SQLite database
+- Created user-friendly interface with input validation
+- Used Git for version control and maintained documentation
+
+2. Personal Portfolio Website (HTML, CSS, JavaScript)
+- Designed and developed responsive personal website
+- Showcased academic projects and achievements
+- Deployed on GitHub Pages
+- Implemented contact form with email integration
+
+3. Library Management System (Java, MySQL)
+- Built a library management system as semester project
+- Implemented book borrowing and return functionality
+- Created admin and user interfaces
+- Worked in a team of 3 students using Git for collaboration
+
+EXPERIENCE
+
+Teaching Assistant - Data Structures Course
+XYZ University | September 2025 - Present
+- Assist professor in conducting lab sessions
+- Help students debug code and understand concepts
+- Grade assignments and provide constructive feedback
+- Conduct weekly doubt-clearing sessions
+
+CERTIFICATIONS
+- Python for Everybody (Coursera)
+- Introduction to Git and GitHub (Coursera)
+- SQL Basics (DataCamp)
+
+ACHIEVEMENTS
+- Dean's List for academic excellence (Fall 2024, Spring 2025)
+- Winner of University Coding Competition 2025
+- Active member of Computer Science Society
+
+SOFT SKILLS
+- Strong problem-solving abilities
+- Effective communication
+- Team player with leadership potential
+- Quick learner and adaptable
+- Time management and organization
+
+INTERESTS
+- Machine Learning and AI
+- Open Source Contribution
+- Competitive Programming
+- Tech Blogging
+
+LANGUAGES
+- English (Fluent)
+- Urdu (Native)
+
+References available upon request.

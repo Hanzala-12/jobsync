@@ -1,0 +1,17 @@
+# Core dependencies for app.py
+python-dotenv==1.0.1
+groq==0.4.2
+
+# PDF support (optional but recommended)
+PyMuPDF==1.23.8
+
+# PDF export (optional)
+fpdf==1.7.2
+
+# Existing JobSync backend dependencies (for web API - optional)
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+sqlalchemy==2.0.27
+pydantic==2.6.1
+python-multipart==0.0.9
+requests==2.31.0
