@@ -44,13 +44,31 @@ KEYWORDS = [
     "html", "css", "flask", "streamlit", "resume", "interview"
 ]
 
-# Initialize Groq client
+# Initialize LLM client (supports both Groq and OpenRouter)
 try:
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    LLM_AVAILABLE = True
-except:
+    api_key = os.getenv("GROQ_API_KEY")
+    if api_key and api_key.startswith("sk-or-v1-"):
+        # OpenRouter API key detected
+        from openai import OpenAI
+        groq_client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key
+        )
+        LLM_MODEL = "meta-llama/llama-3.1-8b-instruct"
+        LLM_AVAILABLE = True
+        print("Using OpenRouter API with Llama 3")
+    elif api_key and api_key.startswith("gsk_"):
+        # Groq API key
+        groq_client = Groq(api_key=api_key)
+        LLM_MODEL = "llama3-8b-8192"
+        LLM_AVAILABLE = True
+        print("Using Groq API with Llama 3")
+    else:
+        LLM_AVAILABLE = False
+        print("Warning: No valid API key. Using keyword-based analysis only.")
+except Exception as e:
     LLM_AVAILABLE = False
-    print("Warning: Groq API not available. Using keyword-based analysis only.")
+    print(f"Warning: LLM API not available ({e}). Using keyword-based analysis only.")
 
 
 # ============================================================================
@@ -120,13 +138,13 @@ def save_text(path, content):
 
 
 def ask_llm(prompt, system_prompt="You are a helpful career AI assistant.", temperature=0.7):
-    """Call Groq LLM for intelligent analysis"""
+    """Call LLM for intelligent analysis (supports Groq and OpenRouter)"""
     if not LLM_AVAILABLE:
         return None
     
     try:
         completion = groq_client.chat.completions.create(
-            model="llama3-8b-8192",
+            model=LLM_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
@@ -614,9 +632,9 @@ def run_full_analysis():
         print("\nAdd .txt or .pdf files to input folders")
         return
     
-    print(f"✓ {len(job_files)} job file(s)")
-    print(f"✓ {len(resume_files)} resume file(s)")
-    print(f"✓ {len(kb_files)} KB file(s)")
+    print(f"[OK] {len(job_files)} job file(s)")
+    print(f"[OK] {len(resume_files)} resume file(s)")
+    print(f"[OK] {len(kb_files)} KB file(s)")
     
     print("\nAnalyzing...")
     job_analysis = analyze_job_with_llm(job_text)
@@ -752,7 +770,7 @@ SUMMARY:
     if PDF_EXPORT:
         pdf_path = os.path.join(OUTPUT_DIR, "final_agent_report.pdf")
         if export_report_as_pdf(final_report, pdf_path):
-            print(f"✓ PDF exported")
+            print(f"[OK] PDF exported")
     
     print("\n" + "="*80)
     print("COMPLETE!")

@@ -1,6 +1,7 @@
 # Core dependencies for app.py
 python-dotenv==1.0.1
 groq==0.4.2
+openai>=1.0.0
 
 # PDF support (optional but recommended)
 PyMuPDF==1.23.8
