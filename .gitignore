@@ -37,6 +37,7 @@ job_copilot.db
 # IDE
 .vscode/
 .idea/
+.kiro/
 *.swp
 *.swo
 *~
