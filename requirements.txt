@@ -6,8 +6,13 @@ openai>=1.0.0
 # PDF support (optional but recommended)
 PyMuPDF==1.23.8
 
-# PDF export (optional)
+# PDF export and generation
 fpdf==1.7.2
+reportlab==4.0.7
+
+# Web scraping for URL ingestion
+beautifulsoup4==4.12.2
+lxml==4.9.3
 
 # Existing JobSync backend dependencies (for web API - optional)
 fastapi==0.110.0
@@ -16,3 +21,4 @@ sqlalchemy==2.0.27
 pydantic==2.6.1
 python-multipart==0.0.9
 requests==2.31.0
+
