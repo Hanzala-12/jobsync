@@ -4,14 +4,30 @@ Automated Job Hunting - JSearch API Integration
 import requests
 import os
 from typing import List, Optional
+from core.geo import validate_and_normalize_location
 
-def search_jobs_jsearch(query: str, location: str = "", api_key: Optional[str] = None) -> List[dict]:
-    """Search jobs using JSearch (RapidAPI)"""
+def search_jobs_jsearch(query: str, location_raw: str = "", api_key: Optional[str] = None) -> List[dict]:
+    """Search jobs using JSearch (RapidAPI) with location validation"""
     api_key = api_key or os.getenv("RAPIDAPI_KEY")
     
     if not api_key:
         # Fallback to empty list if no API key
         return []
+    
+    # Normalize location
+    location_str = ""
+    if location_raw:
+        # Expect input like "Lahore, Pakistan" or just "Pakistan"
+        parts = [p.strip() for p in location_raw.split(',')]
+        city_part = parts[0] if len(parts) > 0 else ""
+        country_part = parts[1] if len(parts) > 1 else ""
+        loc = validate_and_normalize_location(city_part, country_part)
+        location_str = loc["full_location"]
+    
+    # Build query
+    full_query = query
+    if location_str:
+        full_query += f" in {location_str}"
     
     url = "https://jsearch.p.rapidapi.com/search"
     headers = {
@@ -20,7 +36,7 @@ def search_jobs_jsearch(query: str, location: str = "", api_key: Optional[str] =
     }
     
     params = {
-        "query": f"{query} in {location}" if location else query,
+        "query": full_query,
         "page": "1",
         "num_pages": "1",
         "date_posted": "week"

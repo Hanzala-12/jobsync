@@ -28,8 +28,8 @@ def run_daily_scout(query="software engineer", location="remote", min_score=75) 
         # Analyze resume once
         resume_analysis = analyser.analyse_resume(profile.resume_text)
         
-        # Fetch jobs from JSearch
-        jobs = search_jobs_jsearch(query, location)
+        # Fetch jobs from JSearch with location_raw parameter
+        jobs = search_jobs_jsearch(query, location_raw=location)
         
         if not jobs:
             return {"error": "No jobs found. Check API key or try different query."}

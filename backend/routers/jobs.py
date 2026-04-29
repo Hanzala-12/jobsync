@@ -6,35 +6,71 @@ from backend.services.job_apis import fetch_all_jobs
 from backend.schemas import JobOut, JobMatch
 from backend.services.ai_client import ask_llm
 from backend.models import UserProfile
-from typing import List
+from core.job_search import search_jobs_jsearch
+from typing import List, Optional
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 @router.get("/search", response_model=List[JobOut])
-def search_jobs(query: str = "software developer", db: Session = Depends(get_db)):
-    # Fetch from APIs and store in DB
-    raw_jobs = fetch_all_jobs(query)
-    saved = []
-    for j in raw_jobs:
-        existing = db.query(Job).filter(Job.external_id == j["external_id"]).first()
-        if not existing:
-            new_job = Job(
-                source=j["source"],
-                external_id=j["external_id"],
-                title=j["title"],
-                company=j["company"],
-                location=j["location"],
-                description=j["description"],
-                url=j["url"],
-                posted_date=j["posted_date"]
-            )
-            db.add(new_job)
-            db.commit()
-            db.refresh(new_job)
-            saved.append(new_job)
-        else:
-            saved.append(existing)
-    return saved
+def search_jobs(
+    query: str = "software developer", 
+    location: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Search jobs with optional location filter.
+    Location format: "City, Country" or just "Country" (e.g., "Lahore, Pakistan")
+    """
+    # If location is provided, use JSearch API with location validation
+    if location:
+        raw_jobs = search_jobs_jsearch(query, location_raw=location)
+        saved = []
+        for j in raw_jobs:
+            if not j.get("id"):
+                continue
+            existing = db.query(Job).filter(Job.external_id == str(j["id"])).first()
+            if not existing:
+                new_job = Job(
+                    source="jsearch",
+                    external_id=str(j["id"]),
+                    title=j["title"],
+                    company=j["company"],
+                    location=j["location"],
+                    description=j["description"],
+                    url=j["url"],
+                    posted_date=j.get("posted")
+                )
+                db.add(new_job)
+                db.commit()
+                db.refresh(new_job)
+                saved.append(new_job)
+            else:
+                saved.append(existing)
+        return saved
+    else:
+        # Fallback to existing job APIs
+        raw_jobs = fetch_all_jobs(query)
+        saved = []
+        for j in raw_jobs:
+            existing = db.query(Job).filter(Job.external_id == j["external_id"]).first()
+            if not existing:
+                new_job = Job(
+                    source=j["source"],
+                    external_id=j["external_id"],
+                    title=j["title"],
+                    company=j["company"],
+                    location=j["location"],
+                    description=j["description"],
+                    url=j["url"],
+                    posted_date=j["posted_date"]
+                )
+                db.add(new_job)
+                db.commit()
+                db.refresh(new_job)
+                saved.append(new_job)
+            else:
+                saved.append(existing)
+        return saved
 
 @router.get("/{job_id}/match", response_model=JobMatch)
 def match_job(job_id: int, db: Session = Depends(get_db)):
