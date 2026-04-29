@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { 
   Home, FileText, Briefcase, ClipboardList, 
-  FileEdit, MessageSquare, TrendingUp 
+  FileEdit, MessageSquare, TrendingUp, Kanban, Mic, Zap
 } from 'lucide-react'
 import './Layout.css'
 
@@ -13,17 +13,20 @@ const Layout = ({ children }) => {
     { path: '/resume', icon: FileText, label: 'Resume' },
     { path: '/jobs', icon: Briefcase, label: 'Jobs' },
     { path: '/applications', icon: ClipboardList, label: 'Applications' },
+    { path: '/kanban', icon: Kanban, label: 'Kanban Board' },
     { path: '/cover-letter', icon: FileEdit, label: 'Cover Letter' },
     { path: '/interview', icon: MessageSquare, label: 'Interview Prep' },
+    { path: '/mock-interview', icon: Mic, label: 'Mock Interview' },
     { path: '/skill-gap', icon: TrendingUp, label: 'Skill Gap' },
+    { path: '/daily-scout', icon: Zap, label: 'Daily Scout' },
   ]
 
   return (
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1 className="logo">JobSync</h1>
-          <p className="tagline">Sync with your dream job</p>
+          <h1 className="logo">JobSync Pro</h1>
+          <p className="tagline">AI-Powered Job Hunting</p>
         </div>
         <nav className="nav">
           {navItems.map((item) => {
