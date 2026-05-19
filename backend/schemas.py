@@ -5,8 +5,14 @@ from datetime import datetime
 # Resume analysis
 class ResumeAnalysis(BaseModel):
     ats_score: float
+    matched_skills: List[str]
     missing_keywords: List[str]
     tips: List[str]
+    resume_text: Optional[str] = None
+
+
+class ResumeReanalysisRequest(BaseModel):
+    job_description: str
 
 # Job
 class JobOut(BaseModel):
@@ -29,6 +35,8 @@ class ApplicationCreate(BaseModel):
     job_id: Optional[int] = None
     company: str
     role: str
+    status: Optional[str] = None
+    source: Optional[str] = None
     notes: Optional[str] = None
     resume_version: Optional[str] = None
     contact_email: Optional[str] = None
@@ -51,6 +59,7 @@ class CoverLetterRequest(BaseModel):
     job_description: str
     company: str
     role: str
+    tone: Optional[str] = "professional"
 
 class CoverLetterResponse(BaseModel):
     draft: str

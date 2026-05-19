@@ -4,9 +4,10 @@ from backend.database import Base
 import enum
 
 class ApplicationStatus(str, enum.Enum):
+    SAVED = "Saved"
     APPLIED = "Applied"
-    INTERVIEW = "Interview"
-    OFFER = "Offer"
+    INTERVIEWING = "Interviewing"
+    OFFERED = "Offered"
     REJECTED = "Rejected"
 
 class UserProfile(Base):
@@ -36,8 +37,12 @@ class Application(Base):
     job_id = Column(Integer, nullable=True)        # FK to jobs.id (optional)
     company = Column(String)
     role = Column(String)
+    source = Column(String, nullable=True)
     applied_date = Column(DateTime, server_default=func.now())
-    status = Column(String, default=ApplicationStatus.APPLIED.value)
+    interview_date = Column(DateTime, nullable=True)
+    follow_up_date = Column(DateTime, nullable=True)
+    status = Column(String, default=ApplicationStatus.SAVED.value)
+    next_action = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     resume_version = Column(String, nullable=True)
     contact_email = Column(String, nullable=True)

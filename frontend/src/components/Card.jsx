@@ -1,8 +1,8 @@
 import './Card.css'
 
-const Card = ({ children, className = '', title, action }) => {
+const Card = ({ children, className = '', title, action, ...props }) => {
   return (
-    <div className={`card ${className}`}>
+    <div className={`card ${className}`} {...props}>
       {(title || action) && (
         <div className="card-header">
           {title && <h2 className="card-title">{title}</h2>}

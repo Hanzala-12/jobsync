@@ -4,7 +4,7 @@ Follow-up Agent - Automated follow-up reminders and drafts
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from core.database import get_db
-from backend.models import Application
+from backend.models import Application, ApplicationStatus
 from core.llm_provider import LLMProvider
 from datetime import datetime, timedelta
 
@@ -17,7 +17,7 @@ def check_followups(db: Session = Depends(get_db)):
     
     # Find applications that need follow-up
     stale_apps = db.query(Application).filter(
-        Application.status == "Applied",
+        Application.status == ApplicationStatus.APPLIED.value,
         Application.applied_date <= cutoff
     ).all()
     

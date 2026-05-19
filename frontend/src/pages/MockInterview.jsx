@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import Layout from '../components/Layout';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import apiClient from '../api/client'
 import './MockInterview.css';
 
 function MockInterview() {
@@ -21,16 +21,15 @@ function MockInterview() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/interview/generate-questions?job_title=${encodeURIComponent(jobTitle)}&company=${encodeURIComponent(company)}`, {
-        method: 'POST'
-      });
-      const data = await response.json();
-      setQuestions(data.questions);
-      setLoading(false);
+      const response = await apiClient.post('/interview/generate-questions', null, {
+        params: { job_title: jobTitle, company }
+      })
+      setQuestions(response.data.questions)
+      setLoading(false)
     } catch (error) {
-      console.error('Error generating questions:', error);
-      alert('Failed to generate questions');
-      setLoading(false);
+      console.error('Error generating questions:', error)
+      alert('Failed to generate questions')
+      setLoading(false)
     }
   };
 
@@ -42,27 +41,21 @@ function MockInterview() {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/interview/evaluate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: currentQuestion,
-          answer: answer
-        })
-      });
-      const data = await response.json();
-      setFeedback(data.feedback);
-      setLoading(false);
+      const response = await apiClient.post('/interview/evaluate', {
+        question: currentQuestion,
+        answer: answer
+      })
+      setFeedback(response.data.feedback)
+      setLoading(false)
     } catch (error) {
-      console.error('Error evaluating answer:', error);
-      alert('Failed to evaluate answer');
-      setLoading(false);
+      console.error('Error evaluating answer:', error)
+      alert('Failed to evaluate answer')
+      setLoading(false)
     }
   };
 
   return (
-    <Layout>
-      <div className="mock-interview-container">
+    <div className="mock-interview-container">
         <h1>Mock Interview Practice</h1>
         <p className="subtitle">Practice with AI-powered feedback</p>
 
@@ -151,7 +144,6 @@ function MockInterview() {
           </ul>
         </Card>
       </div>
-    </Layout>
   );
 }
 

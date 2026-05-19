@@ -54,22 +54,63 @@ Provide:
 2. Matched skills
 3. Missing skills
 4. Brief explanation"""
-        
         result = self.llm.ask("You are a hiring expert.", prompt)
-        
-        # Parse score from result (simple extraction)
-        score = 75  # default
-        if "score" in result.lower():
-            import re
-            match = re.search(r'(\d+)(?:/100|%|\s+out of 100)', result, re.IGNORECASE)
-            if match:
-                score = int(match.group(1))
-        
+
+        # Initialize defaults
+        score = 0
+        matched = []
+        missing = []
+
+        # Try structured JSON first
+        try:
+            import json
+            data = json.loads(result)
+            # Accept multiple possible key names
+            score = int(data.get("score") or data.get("percentage") or data.get("match_score") or 0)
+            matched = data.get("matched") or data.get("matched_skills") or data.get("matchedSkills") or []
+            missing = data.get("missing") or data.get("missing_skills") or data.get("missingSkills") or []
+            summary = data.get("explanation") or data.get("summary") or result
+        except Exception:
+            # Fallback: free-text parsing
+            summary = result or ""
+            try:
+                import re
+                m = re.search(r'(\d{1,3})(?:\s*%|\s*/\s*100|\s+out of 100)', summary)
+                if m:
+                    score = int(m.group(1))
+            except Exception:
+                score = 0
+
+            # Try to extract matched/missing skills from labeled lines
+            try:
+                lines = [l.strip() for l in summary.splitlines() if l.strip()]
+                for i, line in enumerate(lines):
+                    low = line.lower()
+                    if low.startswith('matched') or 'matched skills' in low:
+                        # take remainder of line after colon or the next line(s)
+                        parts = line.split(':', 1)
+                        if len(parts) > 1:
+                            matched = [s.strip() for s in parts[1].split(',') if s.strip()]
+                        else:
+                            # look ahead
+                            if i+1 < len(lines):
+                                matched = [s.strip() for s in lines[i+1].split(',') if s.strip()]
+                    if low.startswith('missing') or 'missing skills' in low:
+                        parts = line.split(':', 1)
+                        if len(parts) > 1:
+                            missing = [s.strip() for s in parts[1].split(',') if s.strip()]
+                        else:
+                            if i+1 < len(lines):
+                                missing = [s.strip() for s in lines[i+1].split(',') if s.strip()]
+            except Exception:
+                matched = matched or []
+                missing = missing or []
+
         return {
-            "score": score,
-            "analysis": result,
-            "matched": [],
-            "missing": []
+            "score": int(score or 0),
+            "analysis": summary,
+            "matched": matched,
+            "missing": missing
         }
     
     def score_and_filter_jobs(self, resume_analysis: dict, jobs: list, min_score=70) -> list:

@@ -52,9 +52,10 @@ const Applications = () => {
   }
 
   const statusColors = {
-    'Applied': '#64748b',
-    'Interview': '#10b981',
-    'Offer': '#f59e0b',
+    'Saved': '#64748b',
+    'Applied': '#2563eb',
+    'Interviewing': '#10b981',
+    'Offered': '#f59e0b',
     'Rejected': '#ef4444'
   }
 
@@ -139,9 +140,10 @@ const Applications = () => {
                     className="status-select"
                     style={{ borderColor: statusColors[app.status] }}
                   >
+                    <option value="Saved">Saved</option>
                     <option value="Applied">Applied</option>
-                    <option value="Interview">Interview</option>
-                    <option value="Offer">Offer</option>
+                    <option value="Interviewing">Interviewing</option>
+                    <option value="Offered">Offered</option>
                     <option value="Rejected">Rejected</option>
                   </select>
                 </div>

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.schemas import SkillGapRequest, SkillGapResponse, InterviewPrepRequest, InterviewPrepResponse, InterviewQuestion
-from backend.services.ai_client import ask_llm
+from core.llm_provider import LLMProvider
 from backend.models import UserProfile
 import json
 
@@ -20,11 +20,12 @@ And my current skills: {my_skills}
 List the top 5 skills that appear frequently in the jobs but are missing from my list.
 Return JSON: {{"missing_skills": ["skill1", "skill2"], "frequency": {{"skill1": count, ...}}}}"""
 
-    response = ask_llm(prompt)
+    llm = LLMProvider()
+    response = llm.ask("You are an intelligent analysis assistant.", prompt)
     try:
         data = json.loads(response)
         return SkillGapResponse(**data)
-    except:
+    except Exception:
         return SkillGapResponse(missing_skills=["parsing error"], frequency={})
 
 @router.post("/interview-prep", response_model=InterviewPrepResponse)
@@ -33,11 +34,12 @@ def interview_prep(req: InterviewPrepRequest, db: Session = Depends(get_db)):
 Job description context: {req.job_description or 'Not provided'}
 Return JSON: {{"questions": [{{"question": "...", "suggested_answer": "..."}}]}}"""
 
-    response = ask_llm(prompt)
+    llm = LLMProvider()
+    response = llm.ask("You are an interview preparation assistant.", prompt)
     try:
         data = json.loads(response)
         questions = [InterviewQuestion(**q) for q in data["questions"]]
         return InterviewPrepResponse(questions=questions)
-    except:
+    except Exception:
         # fallback
         return InterviewPrepResponse(questions=[InterviewQuestion(question="AI error – try again.", suggested_answer="")])

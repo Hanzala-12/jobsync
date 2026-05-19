@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -17,6 +17,9 @@ export const resumeAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+
+  reanalyze: (jobDescription) =>
+    apiClient.post('/resume/reanalyze', { job_description: jobDescription }),
 }
 
 export const jobsAPI = {
@@ -39,6 +42,11 @@ export const applicationsAPI = {
   
   updateStatus: (appId, status) => 
     apiClient.patch(`/applications/${appId}/status`, { status }),
+}
+
+export const dailyScoutAPI = {
+  run: (data) => apiClient.post('/scout/run', data),
+  status: () => apiClient.get('/scout/status'),
 }
 
 export const coverLetterAPI = {

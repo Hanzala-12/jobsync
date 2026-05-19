@@ -1,26 +1,19 @@
 """
-Unified Database Layer - SQLAlchemy session management
-"""
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from backend.models import Base
-import os
+Core database helpers.
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./jobsync.db")
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+This module re-exports database primitives from `backend.database` so the
+SQLAlchemy `Base` is centralized in one place (backend/database.py) and
+we avoid circular imports between core and backend modules.
+"""
+from backend.database import engine, Base, get_db as backend_get_db, init_db as backend_init_db
+
 
 def init_db():
-    """Initialize database tables"""
-    Base.metadata.create_all(bind=engine)
+    """Initialize database tables using the centralized backend init path."""
+    backend_init_db()
+
 
 def get_db():
-    """Dependency for FastAPI routes"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    """Yield DB session using backend database dependency."""
+    # delegate to backend.database.get_db()
+    yield from backend_get_db()

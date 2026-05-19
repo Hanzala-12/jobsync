@@ -3,7 +3,7 @@ Daily Scout API - Automated job hunting
 """
 from fastapi import APIRouter
 from pydantic import BaseModel
-from core.daily_scout import run_daily_scout
+from core.daily_scout import run_daily_scout, get_scout_status
 
 router = APIRouter(prefix="/scout", tags=["Daily Scout"])
 
@@ -25,8 +25,6 @@ def run_scout(req: ScoutRequest):
 @router.get("/status")
 def scout_status():
     """Get daily scout status"""
-    return {
-        "enabled": True,
-        "last_run": None,  # TODO: Track in database
-        "message": "Daily scout is ready to run"
-    }
+    status = get_scout_status()
+    status["enabled"] = True
+    return status

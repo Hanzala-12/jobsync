@@ -4,7 +4,7 @@ from backend.database import get_db
 from backend.models import Job
 from backend.services.job_apis import fetch_all_jobs
 from backend.schemas import JobOut, JobMatch
-from backend.services.ai_client import ask_llm
+from core.llm_provider import LLMProvider
 from backend.models import UserProfile
 from core.job_search import search_jobs_jsearch
 from typing import List, Optional
@@ -28,11 +28,22 @@ def search_jobs(
         for j in raw_jobs:
             if not j.get("id"):
                 continue
-            existing = db.query(Job).filter(Job.external_id == str(j["id"])).first()
+            ext_id = str(j.get("id"))
+            existing = db.query(Job).filter(Job.external_id == ext_id).first()
+
+            if not existing:
+                title = (j.get("title") or "").strip()
+                company = (j.get("company") or "").strip()
+                if title and company:
+                    existing = db.query(Job).filter(
+                        Job.title.ilike(title),
+                        Job.company.ilike(company)
+                    ).first()
+
             if not existing:
                 new_job = Job(
                     source="jsearch",
-                    external_id=str(j["id"]),
+                    external_id=ext_id,
                     title=j["title"],
                     company=j["company"],
                     location=j["location"],
@@ -52,11 +63,24 @@ def search_jobs(
         raw_jobs = fetch_all_jobs(query)
         saved = []
         for j in raw_jobs:
-            existing = db.query(Job).filter(Job.external_id == j["external_id"]).first()
+            ext = j.get("external_id")
+            existing = None
+            if ext:
+                existing = db.query(Job).filter(Job.external_id == ext).first()
+
+            if not existing:
+                title = (j.get("title") or "").strip()
+                company = (j.get("company") or "").strip()
+                if title and company:
+                    existing = db.query(Job).filter(
+                        Job.title.ilike(title),
+                        Job.company.ilike(company)
+                    ).first()
+
             if not existing:
                 new_job = Job(
                     source=j["source"],
-                    external_id=j["external_id"],
+                    external_id=j.get("external_id"),
                     title=j["title"],
                     company=j["company"],
                     location=j["location"],
@@ -90,15 +114,16 @@ Give:
 - List missing skills
 Respond as JSON: {{"percentage": number, "explanation": "string", "missing_skills": ["..."]}}"""
 
-    response = ask_llm(prompt)
+    llm = LLMProvider()
+    response = llm.ask("You are a hiring expert.", prompt)
     import json
     try:
         data = json.loads(response)
         return JobMatch(
             job_id=job_id,
-            match_percentage=data["percentage"],
-            explanation=data["explanation"],
-            missing_skills=data["missing_skills"]
+            match_percentage=data.get("percentage", 0),
+            explanation=data.get("explanation", ""),
+            missing_skills=data.get("missing_skills", [])
         )
-    except:
+    except Exception:
         return JobMatch(job_id=job_id, match_percentage=0, explanation="Failed to parse AI response", missing_skills=[])
