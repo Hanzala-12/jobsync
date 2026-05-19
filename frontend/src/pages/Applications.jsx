@@ -1,157 +1,117 @@
-import { useState, useEffect } from 'react'
-import { Plus } from 'lucide-react'
-import Card from '../components/Card'
+﻿import { useEffect, useState } from 'react'
 import Button from '../components/Button'
 import { applicationsAPI } from '../api/client'
 import './Applications.css'
 
-const Applications = () => {
+const STATUSES = ['Saved', 'Applied', 'Interviewing', 'Offered', 'Rejected']
+
+const emptyForm = {
+  company: '',
+  role: '',
+  status: 'Saved',
+  next_action: '',
+}
+
+function Applications() {
   const [applications, setApplications] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState(emptyForm)
   const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState({
-    company: '',
-    role: '',
-    notes: ''
-  })
+  const [editingId, setEditingId] = useState(null)
+
+  const loadApplications = async () => {
+    const response = await applicationsAPI.list()
+    setApplications(response.data || [])
+  }
 
   useEffect(() => {
     loadApplications()
   }, [])
 
-  const loadApplications = async () => {
-    try {
-      const response = await applicationsAPI.list()
-      setApplications(response.data)
-    } catch (error) {
-      console.error('Failed to load applications:', error)
-    } finally {
-      setLoading(false)
+  const save = async () => {
+    if (editingId) {
+      await applicationsAPI.update(editingId, form)
+    } else {
+      await applicationsAPI.create(form)
     }
+    setForm(emptyForm)
+    setShowForm(false)
+    setEditingId(null)
+    loadApplications()
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    try {
-      await applicationsAPI.create(formData)
-      setFormData({ company: '', role: '', notes: '' })
-      setShowForm(false)
-      loadApplications()
-    } catch (error) {
-      console.error('Failed to create application:', error)
-    }
-  }
-
-  const handleStatusChange = async (appId, newStatus) => {
-    try {
-      await applicationsAPI.updateStatus(appId, newStatus)
-      loadApplications()
-    } catch (error) {
-      console.error('Failed to update status:', error)
-    }
-  }
-
-  const statusColors = {
-    'Saved': '#64748b',
-    'Applied': '#2563eb',
-    'Interviewing': '#10b981',
-    'Offered': '#f59e0b',
-    'Rejected': '#ef4444'
+  const editRow = (app) => {
+    setEditingId(app.id)
+    setForm({
+      company: app.company,
+      role: app.role,
+      status: app.status,
+      next_action: app.next_action || '',
+    })
+    setShowForm(true)
   }
 
   return (
     <div className="applications-page">
       <div className="page-header">
-        <div>
-          <h1>Applications</h1>
-          <p className="page-description">Track your job applications</p>
-        </div>
-        <Button onClick={() => setShowForm(!showForm)}>
-          <Plus size={20} />
-          Add Application
-        </Button>
+        <h1>Applications</h1>
+        <p className="subtitle">Manage every application in one table.</p>
+      </div>
+
+      <div className="table-head">
+        <p>{applications.length} applications</p>
+        <Button onClick={() => setShowForm((prev) => !prev)}>+ Add</Button>
       </div>
 
       {showForm && (
-        <Card title="New Application">
-          <form onSubmit={handleSubmit} className="application-form">
-            <div className="form-group">
-              <label>Company</label>
-              <input
-                type="text"
-                value={formData.company}
-                onChange={(e) => setFormData({...formData, company: e.target.value})}
-                required
-                className="form-input"
-              />
-            </div>
-            <div className="form-group">
-              <label>Role</label>
-              <input
-                type="text"
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                required
-                className="form-input"
-              />
-            </div>
-            <div className="form-group">
-              <label>Notes</label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                rows="3"
-                className="form-input"
-              />
-            </div>
-            <div className="form-actions">
-              <Button type="submit">Create Application</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </Card>
+        <section className="form-box">
+          <input value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="Company" />
+          <input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} placeholder="Role" />
+          <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+            {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+          <input value={form.next_action} onChange={(event) => setForm({ ...form, next_action: event.target.value })} placeholder="Next action" />
+          <div className="form-actions">
+            <Button onClick={save}>Save</Button>
+            <Button variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm) }}>Cancel</Button>
+          </div>
+        </section>
       )}
 
-      <Card>
-        {loading ? (
-          <p>Loading applications...</p>
-        ) : applications.length === 0 ? (
-          <div className="empty-state">
-            <p>No applications yet. Add your first application to get started.</p>
-          </div>
-        ) : (
-          <div className="applications-list">
-            {applications.map((app) => (
-              <div key={app.id} className="application-item">
-                <div className="application-info">
-                  <h3>{app.role}</h3>
-                  <p className="company-name">{app.company}</p>
-                  <p className="application-date">
-                    Applied: {new Date(app.applied_date).toLocaleDateString()}
-                  </p>
-                  {app.notes && <p className="application-notes">{app.notes}</p>}
-                </div>
-                <div className="application-status">
-                  <select
-                    value={app.status}
-                    onChange={(e) => handleStatusChange(app.id, e.target.value)}
-                    className="status-select"
-                    style={{ borderColor: statusColors[app.status] }}
-                  >
-                    <option value="Saved">Saved</option>
-                    <option value="Applied">Applied</option>
-                    <option value="Interviewing">Interviewing</option>
-                    <option value="Offered">Offered</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      <table className="apps-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Applied</th>
+            <th>Next Action</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {applications.map((app) => (
+            <tr key={app.id}>
+              <td>{app.company}</td>
+              <td>{app.role}</td>
+              <td><span className={`status-badge status-${app.status}`}>{app.status}</span></td>
+              <td>{app.applied_date ? new Date(app.applied_date).toLocaleDateString() : '-'}</td>
+              <td>{app.next_action || '-'}</td>
+              <td>
+                <button className="action-link edit" onClick={() => editRow(app)}>Edit</button>
+                <button
+                  className="action-link delete"
+                  onClick={async () => {
+                    await applicationsAPI.delete(app.id)
+                    loadApplications()
+                  }}
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

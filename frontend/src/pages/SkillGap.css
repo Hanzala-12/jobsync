@@ -1,34 +1,45 @@
-.skill-gap-page {
-  max-width: 900px;
-}
-
-.skill-gap-form {
+﻿.skill-gap-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 14px;
 }
 
-.skills-list {
+.skill-form,
+.result-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 10px;
 }
 
-.skill-item {
+.skill-form textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.skill-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: var(--background);
-  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
 }
 
-.skill-name {
-  font-weight: 500;
-  color: var(--text);
+.skill-row small {
+  color: var(--text-muted);
 }
 
-.skill-frequency {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+@media (max-width: 700px) {
+  .actions,
+  .skill-row {
+    flex-direction: column;
+  }
 }

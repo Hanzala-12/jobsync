@@ -1,35 +1,25 @@
-import { useState } from 'react'
-import { TrendingUp } from 'lucide-react'
-import Card from '../components/Card'
+﻿import { useState } from 'react'
 import Button from '../components/Button'
 import { intelligenceAPI } from '../api/client'
 import './SkillGap.css'
 
-const SkillGap = () => {
+function SkillGap() {
   const [jobDescriptions, setJobDescriptions] = useState([''])
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  const addJobDescription = () => {
-    setJobDescriptions([...jobDescriptions, ''])
+  const updateDescription = (index, value) => {
+    const next = [...jobDescriptions]
+    next[index] = value
+    setJobDescriptions(next)
   }
 
-  const updateJobDescription = (index, value) => {
-    const updated = [...jobDescriptions]
-    updated[index] = value
-    setJobDescriptions(updated)
-  }
-
-  const handleAnalyze = async (e) => {
-    e.preventDefault()
+  const analyze = async () => {
     setLoading(true)
-
     try {
-      const filtered = jobDescriptions.filter(desc => desc.trim())
-      const response = await intelligenceAPI.skillGap(filtered)
+      const payload = jobDescriptions.filter((item) => item.trim())
+      const response = await intelligenceAPI.skillGap(payload)
       setResult(response.data)
-    } catch (error) {
-      console.error('Failed to analyze skill gap:', error)
     } finally {
       setLoading(false)
     }
@@ -38,53 +28,36 @@ const SkillGap = () => {
   return (
     <div className="skill-gap-page">
       <div className="page-header">
-        <h1>Skill Gap Analysis</h1>
-        <p className="page-description">Identify missing skills from job descriptions</p>
+        <h1>Skill Gap</h1>
+        <p className="subtitle">Compare job requirements and identify missing skills.</p>
       </div>
 
-      <Card title="Job Descriptions">
-        <form onSubmit={handleAnalyze} className="skill-gap-form">
-          {jobDescriptions.map((desc, index) => (
-            <div key={index} className="form-group">
-              <label>Job Description {index + 1}</label>
-              <textarea
-                value={desc}
-                onChange={(e) => updateJobDescription(index, e.target.value)}
-                rows="4"
-                className="form-input"
-                required
-              />
-            </div>
-          ))}
-          <div className="form-actions">
-            <Button type="button" variant="outline" onClick={addJobDescription}>
-              Add Another
-            </Button>
-            <Button type="submit" loading={loading}>
-              <TrendingUp size={20} />
-              Analyze Skills
-            </Button>
-          </div>
-        </form>
-      </Card>
+      <section className="skill-form">
+        {jobDescriptions.map((description, index) => (
+          <textarea
+            key={index}
+            value={description}
+            onChange={(event) => updateDescription(index, event.target.value)}
+            rows={4}
+            placeholder={`Job description ${index + 1}`}
+          />
+        ))}
+        <div className="actions">
+          <Button variant="secondary" onClick={() => setJobDescriptions((prev) => [...prev, ''])}>Add Another</Button>
+          <Button onClick={analyze} loading={loading}>Analyze Skills</Button>
+        </div>
+      </section>
 
       {result && (
-        <>
-          <Card title="Missing Skills">
-            <div className="skills-list">
-              {result.missing_skills.map((skill, index) => (
-                <div key={index} className="skill-item">
-                  <span className="skill-name">{skill}</span>
-                  {result.frequency[skill] && (
-                    <span className="skill-frequency">
-                      Appears in {result.frequency[skill]} job(s)
-                    </span>
-                  )}
-                </div>
-              ))}
+        <section className="result-box">
+          <p className="section-label">MISSING SKILLS</p>
+          {(result.missing_skills || []).map((skill) => (
+            <div className="skill-row" key={skill}>
+              <span>{skill}</span>
+              <small>Appears in {result.frequency?.[skill] || 0} job(s)</small>
             </div>
-          </Card>
-        </>
+          ))}
+        </section>
       )}
     </div>
   )

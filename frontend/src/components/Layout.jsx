@@ -1,53 +1,62 @@
-import { Link, useLocation } from 'react-router-dom'
-import { 
-  Home, FileText, Briefcase, ClipboardList, 
-  FileEdit, MessageSquare, TrendingUp, Kanban, Mic, Zap
-} from 'lucide-react'
+﻿import { Link, useLocation } from 'react-router-dom'
 import './Layout.css'
+
+const navGroups = [
+  {
+    label: 'MAIN',
+    items: [{ path: '/', label: 'Dashboard' }],
+  },
+  {
+    label: 'JOBS',
+    items: [
+      { path: '/jobs', label: 'Jobs' },
+      { path: '/daily-scout', label: 'Daily Scout' },
+    ],
+  },
+  {
+    label: 'TRACK',
+    items: [
+      { path: '/applications', label: 'Applications' },
+      { path: '/kanban', label: 'Kanban Board' },
+    ],
+  },
+  {
+    label: 'TOOLS',
+    items: [
+      { path: '/resume', label: 'Resume' },
+      { path: '/cover-letter', label: 'Cover Letter' },
+      { path: '/interview', label: 'Interview Prep' },
+      { path: '/mock-interview', label: 'Mock Interview' },
+      { path: '/skill-gap', label: 'Skill Gap' },
+    ],
+  },
+]
 
 const Layout = ({ children }) => {
   const location = useLocation()
-
-  const navItems = [
-    { path: '/', icon: Home, label: 'Dashboard' },
-    { path: '/resume', icon: FileText, label: 'Resume' },
-    { path: '/jobs', icon: Briefcase, label: 'Jobs' },
-    { path: '/applications', icon: ClipboardList, label: 'Applications' },
-    { path: '/kanban', icon: Kanban, label: 'Kanban Board' },
-    { path: '/cover-letter', icon: FileEdit, label: 'Cover Letter' },
-    { path: '/interview', icon: MessageSquare, label: 'Interview Prep' },
-    { path: '/mock-interview', icon: Mic, label: 'Mock Interview' },
-    { path: '/skill-gap', icon: TrendingUp, label: 'Skill Gap' },
-    { path: '/daily-scout', icon: Zap, label: 'Daily Scout' },
-  ]
+  const mainClass = location.pathname === '/kanban' ? 'app-main app-main-full' : 'app-main'
 
   return (
-    <div className="layout">
+    <div className="layout-shell">
       <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1 className="logo">JobSync Pro</h1>
-          <p className="tagline">AI-Powered Job Hunting</p>
-        </div>
-        <nav className="nav">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const isActive = location.pathname === item.path
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`nav-item ${isActive ? 'active' : ''}`}
-              >
-                <Icon size={20} />
-                <span>{item.label}</span>
-              </Link>
-            )
-          })}
+        <div className="logo">JobSync</div>
+        <nav>
+          {navGroups.map((group) => (
+            <div key={group.label} className="nav-group">
+              <p className="nav-group-label">{group.label}</p>
+              {group.items.map((item) => {
+                const active = location.pathname === item.path
+                return (
+                  <Link key={item.path} to={item.path} className={`nav-link ${active ? 'active' : ''}`}>
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </div>
+          ))}
         </nav>
       </aside>
-      <main className="main-content">
-        {children}
-      </main>
+      <main className={mainClass}>{children}</main>
     </div>
   )
 }

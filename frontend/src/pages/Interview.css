@@ -1,46 +1,101 @@
-.interview-page {
-  max-width: 900px;
-}
-
-.interview-form {
+﻿.interview-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 14px;
 }
 
-.questions-list {
+.predict-inputs {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  margin-top: 2rem;
+  gap: 10px;
 }
 
-.question-item {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+.predict-inputs textarea,
+.predict-inputs input,
+.predict-inputs select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
 }
 
-.question-text {
-  font-size: 1.125rem;
-  font-weight: 500;
-  color: var(--text);
+.inline-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
-.answer-section {
-  padding: 1rem;
-  background: var(--background);
-  border-radius: 0.5rem;
+.question-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
 }
 
-.answer-section h4 {
-  font-size: 0.875rem;
+.question-section h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.question-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.question-card.gap {
+  border-left: 3px solid var(--danger);
+}
+
+.question-card.curveball {
+  border-left: 3px solid var(--warning);
+}
+
+.question-title {
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 0.75rem;
 }
 
-.answer-text {
-  color: var(--text);
-  line-height: 1.6;
+.why {
+  margin-top: 4px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.toggle {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.question-card ul {
+  margin-top: 8px;
+  padding-left: 18px;
+}
+
+.question-foot {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.badge {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .inline-inputs {
+    grid-template-columns: 1fr;
+  }
 }

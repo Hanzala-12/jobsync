@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from core.url_ingestion import extract_job_text_from_url
 from core.database import get_db
-from backend.models import Job
+from core.deduplicator import process_incoming_job
+from core.normalizer import normalize_job
 
 router = APIRouter(prefix="/extension", tags=["Browser Extension"])
 
@@ -24,20 +25,20 @@ def analyze_url(req: URLAnalyze, db: Session = Depends(get_db)):
             "error": job_data.get("error", "Failed to extract job data")
         }
     
-    # Save raw job for later analysis
-    new_job = Job(
-        source="url_ingest",
-        external_id=req.url,
-        title="Imported Job",
-        company="",
-        location="",
-        description=job_data["raw_text"],
-        url=req.url
+    normalized = normalize_job(
+        {
+            "title": "Imported Job",
+            "company": "Unknown",
+            "city": "",
+            "location": "",
+            "description": job_data["raw_text"],
+            "apply_url": req.url,
+            "url": req.url,
+            "external_id": req.url,
+        },
+        "url_ingest",
     )
-    
-    db.add(new_job)
-    db.commit()
-    db.refresh(new_job)
+    new_job, _ = process_incoming_job(db, normalized)
     
     return {
         "success": True,

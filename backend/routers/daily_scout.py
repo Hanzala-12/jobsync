@@ -2,23 +2,20 @@
 Daily Scout API - Automated job hunting
 """
 from fastapi import APIRouter
-from pydantic import BaseModel
+from backend.schemas import ScoutRequest
 from core.daily_scout import run_daily_scout, get_scout_status
 
 router = APIRouter(prefix="/scout", tags=["Daily Scout"])
-
-class ScoutRequest(BaseModel):
-    query: str = "software engineer"
-    location: str = "remote"
-    min_score: int = 75
 
 @router.post("/run")
 def run_scout(req: ScoutRequest):
     """Run daily scout to find and save matching jobs"""
     result = run_daily_scout(
-        query=req.query,
+        role=req.role,
         location=req.location,
-        min_score=req.min_score
+        skills=req.skills,
+        min_score=req.min_score,
+        page=req.page,
     )
     return result
 

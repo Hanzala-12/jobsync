@@ -1,0 +1,122 @@
+﻿.match-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1000;
+}
+
+.match-panel {
+  width: 400px;
+  max-width: 100%;
+  background: #ffffff;
+  padding: 20px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  animation: slide-in 0.2s ease;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.match-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.match-header h3 {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.match-header button {
+  border: 1px solid var(--border);
+  background: #fff;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+.match-job-title {
+  margin-top: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.match-company {
+  color: var(--text-muted);
+}
+
+.score-circle {
+  margin: 16px auto;
+  width: 90px;
+  height: 90px;
+  border: 6px solid var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.paragraph {
+  border-left: 3px solid;
+  padding-left: 10px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+}
+
+.paragraph.green {
+  border-color: var(--success);
+}
+
+.paragraph.red {
+  border-color: var(--danger);
+}
+
+.paragraph.blue {
+  border-color: var(--accent);
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.chip-good {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.chip-bad {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.quick-win {
+  background: var(--accent-bg);
+  border-left: 3px solid var(--accent);
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.full-width {
+  width: 100%;
+}

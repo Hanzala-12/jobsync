@@ -1,19 +1,19 @@
-import './Button.css'
+﻿import './Button.css'
 
-const Button = ({ 
-  children, 
-  variant = 'primary', 
+const Button = ({
+  children,
+  variant = 'primary',
   size = 'medium',
   disabled = false,
   loading = false,
   onClick,
   type = 'button',
-  className = ''
+  className = '',
 }) => {
   return (
     <button
       type={type}
-      className={`btn btn-${variant} btn-${size} ${className} ${loading ? 'loading' : ''}`}
+      className={`btn btn-${variant} btn-${size} ${className}`.trim()}
       disabled={disabled || loading}
       onClick={onClick}
     >

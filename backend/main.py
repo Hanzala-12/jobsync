@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.database import engine, Base
 from backend.routers import resume, jobs, applications, cover_letter, intelligence
 from backend.routers import kanban, voice_interview, browser_extension, followup, daily_scout
+from core.scheduler import start_scheduler_if_enabled
 from core.database import init_db
 
 # Initialize database
@@ -35,6 +36,11 @@ app.include_router(voice_interview.router)
 app.include_router(browser_extension.router)
 app.include_router(followup.router)
 app.include_router(daily_scout.router)
+
+
+@app.on_event("startup")
+def startup_scheduler():
+    start_scheduler_if_enabled()
 
 @app.get("/")
 def root():

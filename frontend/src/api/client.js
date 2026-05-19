@@ -1,4 +1,4 @@
-import axios from 'axios'
+﻿import axios from 'axios'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -17,31 +17,39 @@ export const resumeAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
-
-  reanalyze: (jobDescription) =>
-    apiClient.post('/resume/reanalyze', { job_description: jobDescription }),
+  reanalyze: (jobDescription) => apiClient.post('/resume/reanalyze', { job_description: jobDescription }),
+  rewrite: (payload) => apiClient.post('/resume/rewrite', payload),
+  saveVersion: (payload) => apiClient.post('/resume/versions', payload),
+  listVersions: () => apiClient.get('/resume/versions'),
+  getVersion: (id) => apiClient.get(`/resume/versions/${id}`),
+  deleteVersion: (id) => apiClient.delete(`/resume/versions/${id}`),
+  updateVersionUsedFor: (id, usedFor) => apiClient.patch(`/resume/versions/${id}`, { used_for: usedFor }),
 }
 
 export const jobsAPI = {
-  search: (query = 'software developer') => 
-    apiClient.get('/jobs/search', { params: { query } }),
-  
-  match: (jobId) => 
-    apiClient.get(`/jobs/${jobId}/match`),
+  search: (params = {}) =>
+    apiClient.get('/jobs/search', {
+      params: {
+        query: 'software engineer',
+        location: 'Pakistan',
+        remote_only: false,
+        country_code: 'pk',
+        ...params,
+      },
+    }),
+  match: (jobId) => apiClient.get(`/jobs/${jobId}/match`),
+  explainMatch: (payload) => apiClient.post('/jobs/explain-match', payload),
+  salaryEstimate: (payload) => apiClient.post('/jobs/salary-estimate', payload),
 }
 
 export const applicationsAPI = {
-  create: (data) => 
-    apiClient.post('/applications/', data),
-  
-  list: (status = null) => 
-    apiClient.get('/applications/', { params: status ? { status } : {} }),
-  
-  get: (appId) => 
-    apiClient.get(`/applications/${appId}`),
-  
-  updateStatus: (appId, status) => 
-    apiClient.patch(`/applications/${appId}/status`, { status }),
+  create: (data) => apiClient.post('/applications/', data),
+  list: (status = null) => apiClient.get('/applications/', { params: status ? { status } : {} }),
+  get: (appId) => apiClient.get(`/applications/${appId}`),
+  updateStatus: (appId, status) => apiClient.patch(`/applications/${appId}/status`, { status }),
+  update: (appId, data) => apiClient.patch(`/applications/${appId}`, data),
+  delete: (appId) => apiClient.delete(`/applications/${appId}`),
+  healthScore: () => apiClient.get('/applications/health-score'),
 }
 
 export const dailyScoutAPI = {
@@ -50,19 +58,17 @@ export const dailyScoutAPI = {
 }
 
 export const coverLetterAPI = {
-  generate: (data) => 
-    apiClient.post('/cover-letter/generate', data),
+  generate: (data) => apiClient.post('/cover-letter/generate', data),
 }
 
 export const intelligenceAPI = {
-  skillGap: (jobDescriptions) => 
-    apiClient.post('/intelligence/skill-gap', { job_descriptions: jobDescriptions }),
-  
-  interviewPrep: (role, jobDescription = null) => 
-    apiClient.post('/intelligence/interview-prep', { 
-      role, 
-      job_description: jobDescription 
-    }),
+  skillGap: (jobDescriptions) => apiClient.post('/intelligence/skill-gap', { job_descriptions: jobDescriptions }),
+}
+
+export const interviewAPI = {
+  predict: (payload) => apiClient.post('/interview/predict', payload),
+  evaluate: (payload) => apiClient.post('/interview/evaluate', payload),
+  generateQuestions: (payload) => apiClient.post('/interview/generate-questions', payload),
 }
 
 export default apiClient
