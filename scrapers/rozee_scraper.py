@@ -1,109 +1,147 @@
 from __future__ import annotations
 
-import asyncio
-from typing import Dict, List
+import json
+import re
+from typing import Dict, List, Optional
 from urllib.parse import quote_plus
 
+import requests
 from sqlalchemy.orm import Session
 
 from config.pakistan_jobs_config import CITIES, KEYWORDS
-from scrapers.common import detect_captcha, normalize_and_store, random_user_agent, sleep_between
+from scrapers.common import normalize_and_store
 
 SOURCE = "rozee"
 BASE_URL = "https://www.rozee.pk"
-CITY_CODES = {
-    "karachi": 1,
-    "lahore": 2,
-    "islamabad": 4,
-    "rawalpindi": 5,
-    "peshawar": 14,
-}
+ROZEE_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
 
 
-async def scrape_query_async(keyword: str = "software engineer", city: str = "lahore", max_pages: int = 5) -> List[Dict]:
-    from playwright.async_api import async_playwright
-
-    jobs: List[Dict] = []
-    city_code = CITY_CODES.get(city)
-    urls = []
-    if city_code:
-        urls.append(f"{BASE_URL}/job/jsearch/q/{quote_plus(keyword)}/fc/{city_code}")
-    urls.append(f"{BASE_URL}/all/jobs/q-{quote_plus(keyword)}")
-
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(user_agent=random_user_agent())
-        page = await context.new_page()
-        try:
-            for base_url in urls:
-                for page_no in range(1, max_pages + 1):
-                    url = f"{base_url}?page={page_no}"
-                    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                    content = await page.content()
-                    if detect_captcha(content):
-                        return jobs
-                    cards = await page.query_selector_all(".job, .job-card, article, a[href*='/job-detail']")
-                    for card in cards[:20]:
-                        text = await card.inner_text()
-                        anchor = await card.query_selector("a[href]")
-                        href = await anchor.get_attribute("href") if anchor else url
-                        title = (await anchor.inner_text()) if anchor else text.splitlines()[0] if text else ""
-                        if not title:
-                            continue
-                        apply_url = href if href.startswith("http") else f"{BASE_URL}{href}"
-                        description = await _fetch_description(page, apply_url)
-                        jobs.append(
-                            {
-                                "title": title,
-                                "company": _line_after(text, "Company") or "",
-                                "city": city,
-                                "salary": _line_after(text, "Salary") or "",
-                                "job_type": _line_after(text, "Type") or "",
-                                "experience": _line_after(text, "Experience") or "",
-                                "posted_date": _line_after(text, "Posted") or "",
-                                "apply_url": apply_url,
-                                "description": description or text,
-                            }
-                        )
-                    sleep_between(3, 7)
-                sleep_between(5, 10)
-        finally:
-            await browser.close()
-    return jobs
+def _slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
 
 
-async def _fetch_description(page, url: str) -> str:
-    try:
-        detail = await page.context.new_page()
-        await detail.goto(url, wait_until="domcontentloaded", timeout=30000)
-        description = await detail.locator("body").inner_text(timeout=5000)
-        await detail.close()
-        return description
-    except Exception:
-        return ""
+def _url_for(keyword: str, city: Optional[str] = None, page: int = 1) -> str:
+    if city:
+        path = f"/search/{_slug(keyword)}-jobs-in-{_slug(city)}"
+    else:
+        path = f"/job/jsearch/q/{quote_plus(keyword)}"
+
+    if page <= 1:
+        return f"{BASE_URL}{path}"
+    return f"{BASE_URL}{path}/pg/{page}"
 
 
-def _line_after(text: str, label: str) -> str:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    for index, line in enumerate(lines):
-        if label.lower() in line.lower() and index + 1 < len(lines):
-            return lines[index + 1]
+def _extract_ap_resp(html: str) -> Dict:
+    match = re.search(r"var\s+apResp\s*=\s*", html)
+    if not match:
+        return {}
+
+    start = match.end()
+    if start >= len(html) or html[start] != "{":
+        return {}
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, char in enumerate(html[start:], start):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(html[start : index + 1])
+                except json.JSONDecodeError:
+                    return {}
+    return {}
+
+
+def _city_from_job(item: Dict, fallback_city: Optional[str]) -> str:
+    cities = item.get("city_exact") or []
+    if isinstance(cities, list) and cities:
+        return str(cities[0])
+    if isinstance(cities, str) and cities:
+        return cities
+    return fallback_city or "Pakistan"
+
+
+def _salary_from_job(item: Dict) -> str:
+    salary = item.get("salaryTHide_exact_g") or item.get("salary") or ""
+    if salary:
+        return str(salary)
+    min_salary = item.get("min_salary") or item.get("salaryMin")
+    max_salary = item.get("max_salary") or item.get("salaryMax")
+    if min_salary and max_salary:
+        return f"PKR {min_salary} - {max_salary}"
     return ""
 
 
-def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_pages: int = 5) -> List[Dict]:
-    try:
-        return asyncio.run(scrape_query_async(keyword, city, max_pages))
-    except RuntimeError:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(scrape_query_async(keyword, city, max_pages))
+def _job_from_rozee_item(item: Dict, fallback_city: Optional[str]) -> Dict:
+    city = _city_from_job(item, fallback_city)
+    perma = item.get("rozeePermaLink") or ""
+    apply_url = f"{BASE_URL}/{perma}" if perma and not perma.startswith("http") else perma
+
+    return {
+        "external_id": f"rozee:{item.get('jid') or perma}",
+        "title": item.get("title") or item.get("title_exact") or "",
+        "company": item.get("company_name") or item.get("company_exact") or "Rozee Employer",
+        "city": city,
+        "location": city,
+        "salary": _salary_from_job(item),
+        "job_type": item.get("type") or item.get("type_exact") or "",
+        "experience": item.get("experience") or item.get("experience_exact") or "",
+        "posted_date": item.get("created") or item.get("displayDate") or "",
+        "apply_url": apply_url,
+        "url": apply_url,
+        "description": item.get("description_raw") or item.get("description") or "",
+        "source": SOURCE,
+    }
+
+
+def scrape_query(keyword: str = "software engineer", city: Optional[str] = "lahore", max_pages: int = 2) -> List[Dict]:
+    jobs: List[Dict] = []
+    session = requests.Session()
+    session.headers.update({"User-Agent": ROZEE_USER_AGENT, "Accept-Language": "en-US,en;q=0.9"})
+
+    for page in range(1, max_pages + 1):
+        url = _url_for(keyword, city, page)
+        try:
+            response = session.get(url, timeout=20)
+            response.raise_for_status()
+        except requests.RequestException:
+            break
+
+        payload = _extract_ap_resp(response.text)
+        response_data = payload.get("response") or {}
+        rozee_jobs = (response_data.get("jobs") or {}).get("basic") or []
+        if not rozee_jobs:
+            break
+
+        for item in rozee_jobs:
+            jobs.append(_job_from_rozee_item(item, city))
+
+    return jobs
 
 
 def run(db: Session, keyword_limit: int | None = None, city_limit: int | None = None) -> List[Dict]:
     results = []
-    cities = [city for city in CITIES if city in CITY_CODES]
     for keyword in KEYWORDS[: keyword_limit or len(KEYWORDS)]:
-        for city in cities[: city_limit or len(cities)]:
+        for city in CITIES[: city_limit or len(CITIES)]:
             results.extend(normalize_and_store(db, scrape_query(keyword, city), SOURCE))
     return results
 

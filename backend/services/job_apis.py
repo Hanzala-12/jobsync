@@ -28,6 +28,7 @@ LOCATION_PRESETS: Dict[str, Tuple[Optional[str], str]] = {
 }
 
 PAKISTAN_CITY_KEYS = {"karachi", "lahore", "islamabad", "rawalpindi", "faisalabad"}
+REMOTE_SOURCES = {"remotive", "jobicy"}
 
 
 def clean_text(value: Optional[str]) -> str:
@@ -194,7 +195,6 @@ def _matches_remote_title(job: Dict, query: str) -> bool:
     if "software engineer" in query_lower:
         software_role_terms = [
             "software",
-            "engineer",
             "developer",
             "devloper",
             "full-stack",
@@ -205,6 +205,14 @@ def _matches_remote_title(job: Dict, query: str) -> bool:
             "python",
             "node",
             "programmer",
+            "devops",
+            "android",
+            "ios",
+            "qa",
+            "quality assurance",
+            "it support",
+            "it helpdesk",
+            "technical support",
         ]
         return any(term in title for term in software_role_terms)
 
@@ -231,6 +239,26 @@ def fetch_indexed_pakistan(query: str, city: str, max_urls: int = 4) -> List[Dic
         item["source"] = item.get("source") or "google_indexed"
         normalized.append(_normalize_job(item, item["source"]))
     return [job for job in normalized if _matches_query(job, query)]
+
+
+def fetch_rozee_pakistan(query: str, city: Optional[str] = None, max_pages: int = 1) -> List[Dict]:
+    try:
+        from scrapers.rozee_scraper import scrape_query
+    except Exception:
+        return []
+
+    try:
+        raw_jobs = scrape_query(keyword=query, city=city.lower() if city else None, max_pages=max_pages)
+    except Exception:
+        return []
+
+    jobs = []
+    for raw in raw_jobs:
+        item = dict(raw)
+        item["source"] = "rozee"
+        item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
+        jobs.append(_normalize_job(item, "rozee"))
+    return [job for job in jobs if _matches_remote_title(job, query)]
 
 
 def _mark_remote(jobs: List[Dict]) -> List[Dict]:
@@ -278,12 +306,12 @@ def search_jobs(
         remotive_jobs: List[Dict] = []
         jobicy_jobs: List[Dict] = []
         try:
-            remotive_jobs = fetch_remotive(query=query, limit=20)
+            remotive_jobs = [job for job in fetch_remotive(query=query, limit=20) if _matches_remote_title(job, query)]
         except Exception:
             remotive_jobs = []
 
         try:
-            jobicy_jobs = fetch_jobicy(query=query, count=20)
+            jobicy_jobs = [job for job in fetch_jobicy(query=query, count=20) if _matches_remote_title(job, query)]
         except Exception:
             jobicy_jobs = []
 
@@ -312,34 +340,13 @@ def search_jobs(
         indexed_jobs: List[Dict] = []
         combined_adzuna = dedupe_jobs(adzuna_city_jobs + adzuna_broad_jobs)
         if len(combined_adzuna) < 5:
+            rozee_jobs = fetch_rozee_pakistan(query=query, city=resolved_where or location, max_pages=1)
             indexed_jobs = fetch_indexed_pakistan(query=query, city=resolved_where or location, max_urls=4)
+            indexed_jobs = rozee_jobs + indexed_jobs
 
         combined_adzuna = dedupe_jobs(combined_adzuna + indexed_jobs)
 
-        if pakistan_only:
-            return dedupe_jobs(_clean_jobs(combined_adzuna))
-
-        if len(combined_adzuna) < 5:
-            try:
-                remotive_jobs = [
-                    j for j in fetch_remotive(query=query, limit=20)
-                    if _remote_candidate_filter(j) and _matches_remote_title(j, query)
-                ]
-            except Exception:
-                remotive_jobs = []
-            remote_jobs.extend(_mark_remote(remotive_jobs))
-
-        if len(dedupe_jobs(combined_adzuna + remote_jobs)) < 5:
-            try:
-                jobicy_jobs = [
-                    j for j in fetch_jobicy(query=query, count=20)
-                    if _remote_candidate_filter(j) and _matches_remote_title(j, query)
-                ]
-            except Exception:
-                jobicy_jobs = []
-            remote_jobs.extend(_mark_remote(jobicy_jobs))
-
-        return dedupe_jobs(_clean_jobs(combined_adzuna + remote_jobs))
+        return dedupe_jobs(_clean_jobs(combined_adzuna))
 
     # Pakistan (no city) or non-city location mode
     adzuna_jobs: List[Dict] = []
@@ -348,10 +355,16 @@ def search_jobs(
     except Exception:
         adzuna_jobs = []
 
-    if pakistan_only:
-        return dedupe_jobs(_clean_jobs(adzuna_jobs))
-
     combined = list(adzuna_jobs)
+
+    if country.lower() == "pk" and len(combined) < 5:
+        combined.extend(fetch_rozee_pakistan(query=query, city=None, max_pages=1))
+
+    if pakistan_only:
+        return dedupe_jobs(_clean_jobs(combined))
+
+    if country.lower() == "pk":
+        return dedupe_jobs(_clean_jobs(combined))
 
     # standard fallback when both toggles are off
     if len(combined) < 5:

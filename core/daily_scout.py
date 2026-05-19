@@ -7,8 +7,6 @@ from backend.models import UserProfile
 from backend.services.job_apis import search_jobs
 from core.database import get_db
 from core.deduplicator import process_incoming_job
-from core.engine import JobAnalyser
-from core.llm_provider import LLMProvider
 from core.normalizer import normalize_job
 
 SCOUT_STATE: Dict[str, Any] = {
@@ -19,6 +17,44 @@ SCOUT_STATE: Dict[str, Any] = {
     "error": None,
     "results": [],
 }
+
+
+def _keywords(text: str) -> set[str]:
+    import re
+
+    stop = {"the", "and", "for", "with", "this", "that", "from", "your", "you", "are", "job", "work"}
+    return {word for word in re.findall(r"[a-z0-9+#.]+", (text or "").lower()) if len(word) > 2 and word not in stop}
+
+
+def _score_jobs_fast(resume_text: str, jobs: list, role: str, skills: str, min_score: int) -> list:
+    resume_terms = _keywords(resume_text)
+    target_terms = _keywords(f"{role} {skills}")
+    scored = []
+
+    for job in jobs:
+        title_terms = _keywords(job.get("title", ""))
+        description_terms = _keywords(job.get("description", ""))
+        job_terms = title_terms | description_terms
+
+        target_hits = len(target_terms & job_terms)
+        resume_hits = len(resume_terms & job_terms)
+        title_hits = len(target_terms & title_terms)
+
+        score = 45 + (title_hits * 15) + (target_hits * 6) + min(resume_hits * 3, 20)
+        if job.get("source") in {"rozee", "adzuna", "google_indexed", "mustakbil"}:
+            score += 10
+        score = max(0, min(100, score))
+
+        job["match_score"] = score
+        job["missing_skills"] = sorted(list(target_terms - job_terms))[:6]
+        job["match_analysis"] = "Fast local score based on role, skill, title, and resume keyword overlap."
+        if score >= min_score:
+            scored.append(job)
+
+    if not scored and jobs:
+        scored = sorted(jobs, key=lambda item: item.get("match_score", 0), reverse=True)[:5]
+
+    return sorted(scored, key=lambda item: item.get("match_score", 0), reverse=True)
 
 
 def _set_state(**updates):
@@ -41,11 +77,7 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
             _set_state(running=False, progress=100, message="Resume missing", error="No resume found. Upload resume first.")
             return {"error": "No resume found. Upload resume first."}
 
-        llm = LLMProvider()
-        analyser = JobAnalyser(llm)
-
-        resume_analysis = analyser.analyse_resume(profile.resume_text)
-        _set_state(progress=20, message="Resume analyzed")
+        _set_state(progress=20, message="Resume loaded")
 
         _set_state(progress=35, message="Searching live jobs")
         search_query = " ".join(part for part in [role, skills] if part and part.strip())
@@ -57,7 +89,7 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
             return {"error": "No jobs found. Try a different query."}
 
         _set_state(progress=55, message="Scoring jobs against resume")
-        matches = analyser.score_and_filter_jobs(resume_analysis, jobs, min_score)
+        matches = _score_jobs_fast(profile.resume_text, jobs, role, skills, min_score)
 
         saved_ids = []
         duplicate_count = 0
