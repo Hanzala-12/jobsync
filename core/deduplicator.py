@@ -97,6 +97,16 @@ def handle_duplicate(db: Session, new_job: Dict, existing_job: Job, source_prior
     if not existing_job.salary and new_job.get("salary"):
         existing_job.salary = new_job["salary"]
 
+    if new_job.get("location"):
+        existing_job.location = new_job["location"]
+
+    if new_job.get("city"):
+        existing_job.city = new_job["city"]
+
+    if new_job.get("apply_url") or new_job.get("url"):
+        existing_job.apply_url = new_job.get("apply_url") or existing_job.apply_url
+        existing_job.url = new_job.get("url") or new_job.get("apply_url") or existing_job.url
+
     existing_job.last_seen_at = datetime.now()
     existing_job.possibly_inactive = bool(new_job.get("possibly_inactive", existing_job.possibly_inactive))
     db.commit()
@@ -132,6 +142,12 @@ def process_incoming_job(db: Session, new_job: Dict) -> Tuple[Job, str]:
     """Run all dedup layers, merge duplicates, or save a unique job."""
     fingerprint = generate_fingerprint(new_job["title"], new_job["company"], new_job.get("city", ""))
 
+    external_id = str(new_job.get("external_id") or new_job.get("apply_url") or "").strip()
+    if external_id:
+        external_match = db.query(Job).filter(Job.external_id == external_id).first()
+        if external_match:
+            return handle_duplicate(db, new_job, external_match, SOURCE_PRIORITY), "external_id"
+
     exact_match = db.query(Job).filter(Job.dedup_fingerprint == fingerprint).first()
     if exact_match:
         return handle_duplicate(db, new_job, exact_match, SOURCE_PRIORITY), "layer1"
@@ -149,7 +165,7 @@ def process_incoming_job(db: Session, new_job: Dict) -> Tuple[Job, str]:
     now = datetime.now()
     job = Job(
         source=new_job.get("source"),
-        external_id=new_job.get("external_id") or new_job.get("apply_url"),
+        external_id=external_id or None,
         title=new_job.get("title", ""),
         company=new_job.get("company", ""),
         location=new_job.get("location") or new_job.get("city", ""),

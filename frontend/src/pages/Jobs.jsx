@@ -203,7 +203,7 @@ function Jobs() {
         <p className="notice-text">Showing {localCount} local jobs and {remoteCount} remote jobs for {location}</p>
       )}
 
-      {isCitySearch && jobs.length < 5 && !pakistanOnly && (
+      {isCitySearch && localCount < 5 && remoteCount > 0 && !pakistanOnly && (
         <p className="limited-text">Limited local jobs found for {location}. Showing remote jobs that accept Pakistan candidates.</p>
       )}
 

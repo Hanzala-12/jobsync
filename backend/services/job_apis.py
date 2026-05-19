@@ -177,6 +177,62 @@ def _remote_candidate_filter(job: Dict) -> bool:
     return in_description or in_location
 
 
+def _matches_query(job: Dict, query: str) -> bool:
+    words = [word for word in re.findall(r"[a-z0-9+#.]+", (query or "").lower()) if len(word) > 2]
+    if not words:
+        return True
+    searchable = f"{job.get('title', '')} {job.get('description', '')}".lower()
+    return any(word in searchable for word in words)
+
+
+def _matches_remote_title(job: Dict, query: str) -> bool:
+    title = str(job.get("title") or "").lower()
+    query_lower = (query or "").lower()
+    if not query_lower.strip():
+        return True
+
+    if "software engineer" in query_lower:
+        software_role_terms = [
+            "software",
+            "engineer",
+            "developer",
+            "devloper",
+            "full-stack",
+            "full stack",
+            "backend",
+            "frontend",
+            "react",
+            "python",
+            "node",
+            "programmer",
+        ]
+        return any(term in title for term in software_role_terms)
+
+    words = [word for word in re.findall(r"[a-z0-9+#.]+", query_lower) if len(word) > 2]
+    return any(word in title for word in words)
+
+
+def fetch_indexed_pakistan(query: str, city: str, max_urls: int = 4) -> List[Dict]:
+    """Free fallback for Pakistan-local jobs when Adzuna has no data or no keys."""
+    try:
+        from scrapers.indexed_jobs_scraper import scrape_query
+    except Exception:
+        return []
+
+    try:
+        raw_jobs = scrape_query(keyword=query, city=city.lower(), max_urls=max_urls)
+    except Exception:
+        return []
+
+    normalized = []
+    for raw in raw_jobs:
+        item = dict(raw)
+        item["location"] = city
+        item["source"] = item.get("source") or "google_indexed"
+        normalized.append(_normalize_job(item, item["source"]))
+    return [job for job in normalized if _matches_query(job, query)]
+
+
 def _mark_remote(jobs: List[Dict]) -> List[Dict]:
     marked = []
     for job in jobs:
@@ -253,21 +309,32 @@ def search_jobs(
             except Exception:
                 adzuna_broad_jobs = []
 
+        indexed_jobs: List[Dict] = []
         combined_adzuna = dedupe_jobs(adzuna_city_jobs + adzuna_broad_jobs)
+        if len(combined_adzuna) < 5:
+            indexed_jobs = fetch_indexed_pakistan(query=query, city=resolved_where or location, max_urls=4)
+
+        combined_adzuna = dedupe_jobs(combined_adzuna + indexed_jobs)
 
         if pakistan_only:
             return dedupe_jobs(_clean_jobs(combined_adzuna))
 
         if len(combined_adzuna) < 5:
             try:
-                remotive_jobs = [j for j in fetch_remotive(query=query, limit=20) if _remote_candidate_filter(j)]
+                remotive_jobs = [
+                    j for j in fetch_remotive(query=query, limit=20)
+                    if _remote_candidate_filter(j) and _matches_remote_title(j, query)
+                ]
             except Exception:
                 remotive_jobs = []
             remote_jobs.extend(_mark_remote(remotive_jobs))
 
         if len(dedupe_jobs(combined_adzuna + remote_jobs)) < 5:
             try:
-                jobicy_jobs = [j for j in fetch_jobicy(query=query, count=20) if _remote_candidate_filter(j)]
+                jobicy_jobs = [
+                    j for j in fetch_jobicy(query=query, count=20)
+                    if _remote_candidate_filter(j) and _matches_remote_title(j, query)
+                ]
             except Exception:
                 jobicy_jobs = []
             remote_jobs.extend(_mark_remote(jobicy_jobs))
@@ -289,14 +356,20 @@ def search_jobs(
     # standard fallback when both toggles are off
     if len(combined) < 5:
         try:
-            remotive_jobs = [j for j in fetch_remotive(query=query, limit=20) if _remote_candidate_filter(j)]
+            remotive_jobs = [
+                j for j in fetch_remotive(query=query, limit=20)
+                if _remote_candidate_filter(j) and _matches_remote_title(j, query)
+            ]
         except Exception:
             remotive_jobs = []
         combined.extend(_mark_remote(remotive_jobs))
 
     if len(dedupe_jobs(combined)) < 5:
         try:
-            jobicy_jobs = [j for j in fetch_jobicy(query=query, count=20) if _remote_candidate_filter(j)]
+            jobicy_jobs = [
+                j for j in fetch_jobicy(query=query, count=20)
+                if _remote_candidate_filter(j) and _matches_remote_title(j, query)
+            ]
         except Exception:
             jobicy_jobs = []
         combined.extend(_mark_remote(jobicy_jobs))
