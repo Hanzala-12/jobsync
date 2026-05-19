@@ -29,6 +29,11 @@ LOCATION_PRESETS: Dict[str, Tuple[Optional[str], str]] = {
 
 PAKISTAN_CITY_KEYS = {"karachi", "lahore", "islamabad", "rawalpindi", "faisalabad"}
 REMOTE_SOURCES = {"remotive", "jobicy"}
+QUERY_CORRECTIONS = {
+    "artifical": "artificial",
+    "artifical intelligence": "artificial intelligence",
+    "machin learning": "machine learning",
+}
 
 
 def clean_text(value: Optional[str]) -> str:
@@ -186,11 +191,60 @@ def _matches_query(job: Dict, query: str) -> bool:
     return any(word in searchable for word in words)
 
 
+def _normalize_query(query: str) -> str:
+    normalized = (query or "").strip().lower()
+    for wrong, right in QUERY_CORRECTIONS.items():
+        normalized = re.sub(rf"\b{re.escape(wrong)}\b", right, normalized)
+    return normalized
+
+
+def _query_variants(query: str) -> List[str]:
+    normalized = _normalize_query(query)
+    variants = [normalized]
+    if _is_ai_query(normalized):
+        variants.extend(["ai engineer", "machine learning", "ai ml", "data science", "generative ai"])
+    return list(dict.fromkeys([variant for variant in variants if variant]))
+
+
+def _is_ai_query(query: str) -> bool:
+    normalized = _normalize_query(query)
+    return any(
+        term in normalized
+        for term in ["artificial intelligence", "ai engineer", " ai", "ai ", "machine learning", "data science", "generative ai"]
+    )
+
+
+def _title_contains_any(title: str, terms: List[str]) -> bool:
+    title_lower = (title or "").lower()
+    for term in terms:
+        if len(term) <= 3:
+            if re.search(rf"\b{re.escape(term)}\b", title_lower):
+                return True
+        elif term in title_lower:
+            return True
+    return False
+
+
 def _matches_remote_title(job: Dict, query: str) -> bool:
     title = str(job.get("title") or "").lower()
-    query_lower = (query or "").lower()
+    query_lower = _normalize_query(query)
     if not query_lower.strip():
         return True
+
+    if _is_ai_query(query_lower):
+        return _title_contains_any(
+            title,
+            [
+                "ai",
+                "artificial intelligence",
+                "machine learning",
+                "ml",
+                "data science",
+                "data scientist",
+                "generative",
+                "prompt engineer",
+            ],
+        )
 
     if "software engineer" in query_lower:
         software_role_terms = [
@@ -220,6 +274,20 @@ def _matches_remote_title(job: Dict, query: str) -> bool:
     return any(word in title for word in words)
 
 
+def _filter_city(jobs: List[Dict], city: Optional[str]) -> List[Dict]:
+    if not city:
+        return jobs
+    city_key = city.strip().lower()
+    if city_key not in PAKISTAN_CITY_KEYS:
+        return jobs
+    filtered = []
+    for job in jobs:
+        location_key = clean_text(job.get("location") or job.get("city") or "").lower()
+        if location_key == city_key:
+            filtered.append(job)
+    return filtered
+
+
 def fetch_indexed_pakistan(query: str, city: str, max_urls: int = 4) -> List[Dict]:
     """Free fallback for Pakistan-local jobs when Adzuna has no data or no keys."""
     try:
@@ -247,10 +315,12 @@ def fetch_rozee_pakistan(query: str, city: Optional[str] = None, max_pages: int 
     except Exception:
         return []
 
-    try:
-        raw_jobs = scrape_query(keyword=query, city=city.lower() if city else None, max_pages=max_pages)
-    except Exception:
-        return []
+    raw_jobs = []
+    for variant in _query_variants(query):
+        try:
+            raw_jobs.extend(scrape_query(keyword=variant, city=city.lower() if city else None, max_pages=max_pages))
+        except Exception:
+            continue
 
     jobs = []
     for raw in raw_jobs:
@@ -258,7 +328,7 @@ def fetch_rozee_pakistan(query: str, city: Optional[str] = None, max_pages: int 
         item["source"] = "rozee"
         item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
         jobs.append(_normalize_job(item, "rozee"))
-    return [job for job in jobs if _matches_remote_title(job, query)]
+    return _filter_city([job for job in jobs if _matches_remote_title(job, query)], city)
 
 
 def _mark_remote(jobs: List[Dict]) -> List[Dict]:
@@ -298,6 +368,7 @@ def search_jobs(
     country_code: str = "pk",
     pakistan_only: bool = False,
 ) -> List[Dict]:
+    query = _normalize_query(query)
     location_key = (location or "").strip().lower()
     is_remote_mode = remote_only or location_key == "remote"
 

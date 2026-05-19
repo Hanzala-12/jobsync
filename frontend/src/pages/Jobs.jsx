@@ -46,6 +46,9 @@ function Jobs() {
   const search = async () => {
     setLoading(true)
     setError('')
+    setJobs([])
+    setSalaryCard(null)
+    setSalaryData(null)
     try {
       const selectedRemote = remoteOnly || location === 'Remote'
       const response = await jobsAPI.search({
