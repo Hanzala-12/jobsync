@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import { useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
 import MatchPanel from '../components/MatchPanel'
@@ -33,7 +32,7 @@ function Jobs() {
   const [error, setError] = useState('')
   const [streamingCount, setStreamingCount] = useState(0)
   const [streamElapsed, setStreamElapsed] = useState(0)
-  const [page, setPage] = useState(2)
+  const [page, setPage] = useState(1)
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelJob, setPanelJob] = useState(null)
   const [matchData, setMatchData] = useState(null)
@@ -41,7 +40,7 @@ function Jobs() {
   const [matchModalLoading, setMatchModalLoading] = useState(false)
   const [matchModalResult, setMatchModalResult] = useState(null)
   const [toast, setToast] = useState('')
-    const [profileExists, setProfileExists] = useState(false)
+  const [profileExists, setProfileExists] = useState(false)
   const [salaryCard, setSalaryCard] = useState(null)
   const [salaryData, setSalaryData] = useState(null)
   const [suggestions, setSuggestions] = useState([])
@@ -49,7 +48,7 @@ function Jobs() {
 
   const localCount = useMemo(() => jobs.filter((job) => job.source === 'adzuna').length, [jobs])
   const remoteCount = useMemo(() => jobs.filter((job) => job.source !== 'adzuna').length, [jobs])
-    setJobs([])
+  const resultText = useMemo(() => `${jobs.length} jobs found for "${query}"`, [jobs, query])
 
   const isCitySearch = PAK_CITIES.includes(location)
 
@@ -60,16 +59,45 @@ function Jobs() {
         const response = await jobsAPI.autocomplete(value)
         setSuggestions(response.data?.suggestions || [])
         setShowSuggestions(true)
-        // Start or reuse shared background stream so it continues across navigation
-        searchStream.start(url)
-        setLoading(true)
-      } catch (e) {
-                const k = j.external_id || j.url || `${j.title}-${j.company}`
-                if (!seen.has(k)) {
-                  seen.add(k)
-                  newJobs.push(j)
-                }
-              }
+      } catch {
+        setSuggestions([])
+      }
+    } else {
+      setSuggestions([])
+      setShowSuggestions(false)
+    }
+  }
+
+  const selectSuggestion = (suggestion) => {
+    setQuery(suggestion)
+    setSuggestions([])
+    setShowSuggestions(false)
+  }
+
+  const search = async () => {
+    setLoading(true)
+    setError('')
+    setJobs([])
+    setSalaryCard(null)
+    setSalaryData(null)
+    setStreamingCount(0)
+    setStreamElapsed(0)
+    const selectedRemote = remoteOnly || location === 'Remote'
+    const API_BASE = import.meta.env.VITE_API_URL || '/api'
+    const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
+    const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}`
+
+    try {
+      // Start or reuse shared background stream so it continues across navigation
+      searchStream.start(url)
+      setLoading(true)
+    } catch (e) {
+      console.error('Search error:', e)
+      setError('Could not fetch jobs. Please try again.')
+      setJobs([])
+      setLoading(false)
+    }
+  }
 
   // Subscribe to shared search stream updates. Unsubscribe on unmount but keep stream running.
   useEffect(() => {
@@ -80,36 +108,6 @@ function Jobs() {
       setLoading(Boolean(s.loading))
     })
     return () => { unsub() }
-  }, [])
-              if (esRef.current === es) esRef.current = null
-            }
-          } catch (e) {
-            console.error('Parse error in stream:', e)
-          }
-        }
-      
-        es.onerror = (err) => {
-          console.error('EventSource error:', err)
-          setLoading(false)
-          try { es.close() } catch (e) { /* ignore */ }
-          if (esRef.current === es) esRef.current = null
-        }
-      } catch (e) {
-        console.error('Search error:', e)
-        setError('Could not fetch jobs. Please try again.')
-        setJobs([])
-        setLoading(false)
-      }
-  }
-
-  // Clean up EventSource when leaving page
-  useEffect(() => {
-    return () => {
-      if (esRef.current) {
-        try { esRef.current.close() } catch (e) { /* ignore */ }
-        esRef.current = null
-      }
-    }
   }, [])
 
   const saveToTracker = async (job) => {
@@ -335,7 +333,7 @@ function Jobs() {
 
             {salaryCard === index && salaryData && (
               <div className="salary-popover">
-                <p>PKR {salaryData.local_min}-{salaryData.local_max}/month · ${salaryData.remote_min}-${salaryData.remote_max} remote</p>
+                <p>PKR {salaryData.local_min}-{salaryData.local_max}/month · ${salaryData.remote_min}-{salaryData.remote_max} remote</p>
                 <p>Demand: <strong className="demand-badge">{salaryData.market_demand}</strong></p>
                 <p>{salaryData.negotiation_tip}</p>
                 <small>AI estimate</small>
