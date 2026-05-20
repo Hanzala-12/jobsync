@@ -45,7 +45,19 @@ const Layout = ({ children }) => {
       <aside className="sidebar">
         <div className="logo">
           <span>JobSync</span>
-          <button className="stop-search-btn" onClick={() => { try { searchStream.stop(); alert('Search stopped') } catch (e) {} }}>Stop Search</button>
+          <button
+            className="stop-search-btn"
+            onClick={() => {
+              try {
+                if (window.confirm('Stop background search?')) {
+                  searchStream.stop()
+                  alert('Search stopped')
+                }
+              } catch (e) {}
+            }}
+          >
+            Stop Search
+          </button>
         </div>
         <nav>
           {navGroups.map((group) => (
