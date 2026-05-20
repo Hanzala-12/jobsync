@@ -87,50 +87,6 @@ def list_applications(status: str = None, db: Session = Depends(get_db)):
     return query.order_by(Application.applied_date.desc()).all()
 
 
-@router.get("/{app_id}", response_model=ApplicationOut)
-def get_application(app_id: int, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
-    if not app:
-        raise HTTPException(404, "Application not found")
-    return app
-
-
-@router.patch("/{app_id}/status", response_model=ApplicationOut)
-def update_status(app_id: int, status_update: StatusUpdate, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
-    if not app:
-        raise HTTPException(404, "Application not found")
-    app.status = status_update.status
-    db.commit()
-    db.refresh(app)
-    return app
-
-
-@router.patch("/{app_id}", response_model=ApplicationOut)
-def update_application(app_id: int, update: ApplicationUpdate, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
-    if not app:
-        raise HTTPException(404, "Application not found")
-
-    for field, value in update.model_dump(exclude_unset=True).items():
-        setattr(app, field, value)
-
-    db.commit()
-    db.refresh(app)
-    return app
-
-
-@router.delete("/{app_id}")
-def delete_application(app_id: int, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
-    if not app:
-        raise HTTPException(404, "Application not found")
-
-    db.delete(app)
-    db.commit()
-    return {"success": True}
-
-
 @router.get("/health-score", response_model=HealthScoreResponse)
 def application_health_score(db: Session = Depends(get_db)):
     applications = db.query(Application).order_by(Application.applied_date.desc()).all()
@@ -224,3 +180,49 @@ def application_health_score(db: Session = Depends(get_db)):
         improvements=improvements,
         streak=_calculate_streak(applications),
     )
+
+
+@router.get("/{app_id}", response_model=ApplicationOut)
+def get_application(app_id: int, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+    return app
+
+
+@router.patch("/{app_id}/status", response_model=ApplicationOut)
+def update_status(app_id: int, status_update: StatusUpdate, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+    app.status = status_update.status
+    db.commit()
+    db.refresh(app)
+    return app
+
+
+@router.patch("/{app_id}", response_model=ApplicationOut)
+def update_application(app_id: int, update: ApplicationUpdate, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+
+    for field, value in update.model_dump(exclude_unset=True).items():
+        setattr(app, field, value)
+
+    db.commit()
+    db.refresh(app)
+    return app
+
+
+@router.delete("/{app_id}")
+def delete_application(app_id: int, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+
+    db.delete(app)
+    db.commit()
+    return {"success": True}
+
+
