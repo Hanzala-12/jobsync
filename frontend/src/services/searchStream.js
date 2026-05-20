@@ -49,6 +49,10 @@ function start(url) {
           }
         }
         if (data.done) {
+          if (Array.isArray(data.results)) {
+            state.jobs = [...data.results]
+            state.streamingCount = data.results.length
+          }
           state.loading = false
           try { es.close() } catch (e) {}
           state.es = null
