@@ -92,6 +92,65 @@ async def _validate_resume_upload(upload: UploadFile) -> None:
     await upload.seek(0)
 
 
+async def _index_profile_text(profile_text: str) -> None:
+    try:
+        from core.rag_service import get_chroma_collection, get_embedding_model
+
+        collection = get_chroma_collection()
+        if collection is None:
+            return
+
+        chunks = chunk_text(profile_text, chunk_size=800, overlap=200)
+        if not chunks:
+            return
+
+        ids = []
+        metadatas = []
+        documents = []
+        uid = 'user1'
+        for i, chunk in enumerate(chunks):
+            ids.append(f"profile_{uid}_{i}")
+            metadatas.append({"doc_type": "user_profile", "user_id": "current_user", "chunk_index": i})
+            documents.append(chunk)
+
+        try:
+            embedding_model = get_embedding_model()
+        except Exception:
+            embedding_model = None
+
+        if embedding_model is not None:
+            try:
+                import asyncio
+
+                loop = asyncio.get_running_loop()
+                embeddings = await loop.run_in_executor(
+                    None,
+                    lambda: embedding_model.encode(documents, convert_to_numpy=True),
+                )
+            except RuntimeError:
+                embeddings = embedding_model.encode(documents, convert_to_numpy=True)
+
+            embeddings_payload = [embedding.tolist() for embedding in embeddings]
+            try:
+                collection.add(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings_payload)
+            except Exception:
+                try:
+                    collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings_payload)
+                except Exception:
+                    pass
+            return
+
+        try:
+            collection.add(ids=ids, documents=documents, metadatas=metadatas)
+        except Exception:
+            try:
+                collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+            except Exception:
+                pass
+    except Exception:
+        return
+
+
 def _extract_text_from_upload(upload: UploadFile) -> str:
     fname = upload.filename.lower() if upload and upload.filename else ''
     data = b''
@@ -146,7 +205,7 @@ def _extract_text_from_upload(upload: UploadFile) -> str:
 async def upload_profile(
     skills: str = Form(...),
     degree: str = Form(...),
-    years_experience: int = Form(...),
+    years_experience: Optional[str] = Form(None),
     interests: Optional[str] = Form(None),
     resume: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -158,7 +217,8 @@ async def upload_profile(
     profile_text_parts = []
     profile_text_parts.append(f"Skills: {skills}")
     profile_text_parts.append(f"Degree: {degree}")
-    profile_text_parts.append(f"Years Experience: {years_experience}")
+    years_value = (years_experience or "").strip()
+    profile_text_parts.append(f"Years Experience: {years_value}")
     if interests:
         profile_text_parts.append(f"Interests: {interests}")
 
@@ -177,47 +237,7 @@ async def upload_profile(
     db.refresh(new_profile)
 
     # Chunk and embed via existing ingestion utilities
-    docs = []
-    uid = 'user1'
-    chunks = chunk_text(profile_text, chunk_size=800, overlap=200)
-    ids, metadatas, documents, embeddings = [], [], [], []
-    # lazy import embedding model to avoid heavy imports at app startup
-    try:
-        from core.rag_service import get_embedding_model
-        embedding_model = get_embedding_model()
-    except Exception:
-        from sentence_transformers import SentenceTransformer
-        embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-
-    for i, c in enumerate(chunks):
-        doc_id = f"profile_{uid}_{i}"
-        ids.append(doc_id)
-        metadatas.append({"doc_type": "user_profile", "user_id": "current_user", "chunk_index": i})
-        documents.append(c)
-
-    if documents:
-        try:
-            import asyncio
-            loop = asyncio.get_running_loop()
-            embs = await loop.run_in_executor(None, lambda: embedding_model.encode(documents, convert_to_numpy=True))
-        except RuntimeError:
-            embs = embedding_model.encode(documents, convert_to_numpy=True)
-        embeddings = [e.tolist() for e in embs]
-        # lazy get chroma collection
-        try:
-            from core.rag_service import get_chroma_collection
-            collection = get_chroma_collection()
-        except Exception:
-            collection = None
-        try:
-            if collection is not None:
-                collection.add(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
-        except Exception:
-            try:
-                if collection is not None:
-                    collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
-            except Exception:
-                pass
+    await _index_profile_text(profile_text)
 
     return {"status": "success", "message": "Profile saved", "id": new_profile.id}
 
@@ -333,7 +353,7 @@ def delete_profile(profile_id: int, db: Session = Depends(get_db)):
 async def update_profile(profile_id: int,
                          skills: Optional[str] = Form(None),
                          degree: Optional[str] = Form(None),
-                         years_experience: Optional[int] = Form(None),
+                         years_experience: Optional[str] = Form(None),
                          interests: Optional[str] = Form(None),
                          resume: Optional[UploadFile] = File(None),
                          db: Session = Depends(get_db)):
@@ -353,7 +373,7 @@ async def update_profile(profile_id: int,
         if degree is not None:
             parts.append(f"Degree: {degree}")
         if years_experience is not None:
-            parts.append(f"Years Experience: {years_experience}")
+            parts.append(f"Years Experience: {years_experience.strip()}")
         if interests is not None:
             parts.append(f"Interests: {interests}")
 

@@ -59,9 +59,7 @@ export const resumeAPI = {
   analyze: (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    return apiClient.post('/resume/analyze', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    return apiClient.post('/resume/analyze', formData)
   },
   reanalyze: (jobDescription) => apiClient.post('/resume/reanalyze', { job_description: jobDescription }),
   rewrite: (payload) => apiClient.post('/resume/rewrite', payload),
@@ -92,14 +90,12 @@ export const jobsAPI = {
 
 export const profileAPI = {
   create: (formData) =>
-    apiClient.post('/profile', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    apiClient.post('/profile', formData),
   exists: () => apiClient.get('/profile'),
   select: (id) => apiClient.post(`/profile/select/${id}`),
   selected: () => apiClient.get('/profile/selected'),
   get: (id) => apiClient.get(`/profile/${id}`),
-  update: (id, formData) => apiClient.patch(`/profile/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update: (id, formData) => apiClient.patch(`/profile/${id}`, formData),
   list: (page = 1, per_page = 10) => apiClient.get('/profile', { params: { page, per_page } }),
   delete: (id) => apiClient.delete(`/profile/${id}`),
 }
