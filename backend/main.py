@@ -6,10 +6,20 @@ from backend.routers import kanban, voice_interview, browser_extension, followup
 import importlib
 profile = importlib.import_module('backend.routers.profile')
 from core.scheduler import start_scheduler_if_enabled
-from core.database import init_db
+import os
+from alembic.config import Config
+from alembic import command
 
-# Initialize database
-init_db()
+# Initialize database / run migrations automatically on startup
+try:
+    alembic_ini_path = os.path.join(os.path.dirname(__file__), "alembic.ini")
+    if not os.path.exists(alembic_ini_path):
+        alembic_ini_path = "backend/alembic.ini"
+    alembic_cfg = Config(alembic_ini_path)
+    command.upgrade(alembic_cfg, "head")
+    print("Alembic migrations applied successfully on startup.")
+except Exception as e:
+    print(f"Alembic migration failed on startup: {e}")
 
 app = FastAPI(
     title="JobSync Pro API", 

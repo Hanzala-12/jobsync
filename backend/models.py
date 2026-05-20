@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 import enum
 
 from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
@@ -80,3 +80,14 @@ class ResumeVersion(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     used_for = Column(String, nullable=True)
     ats_score = Column(Integer, nullable=True)
+
+
+class PrefetchedJob(Base):
+    __tablename__ = "prefetched_jobs"
+
+    job_id = Column(String, primary_key=True)
+    title = Column(String, nullable=True)
+    company = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    source = Column(String, nullable=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow)

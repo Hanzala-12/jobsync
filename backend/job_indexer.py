@@ -8,7 +8,8 @@ import time
 import logging
 from datetime import datetime
 from backend.services import job_apis
-from backend.database import engine, init_db
+from backend.database import engine
+from core.database import init_db
 import json
 
 _logger = logging.getLogger(__name__)

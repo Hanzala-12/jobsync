@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.schemas import CoverLetterRequest, CoverLetterResponse
 from backend.models import UserProfile
-from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
+from core.rag_service import generate_cover_letter_with_rag_async, save_cover_letter_artifacts
 
 router = APIRouter(prefix="/cover-letter", tags=["Cover Letter"])
 
 @router.post("/generate", response_model=CoverLetterResponse)
-def generate_cover_letter(req: CoverLetterRequest, db: Session = Depends(get_db)):
+async def generate_cover_letter(req: CoverLetterRequest, db: Session = Depends(get_db)):
     profile = db.query(UserProfile).first()
     resume_context = ""
     if profile and profile.resume_text:
@@ -22,7 +22,7 @@ def generate_cover_letter(req: CoverLetterRequest, db: Session = Depends(get_db)
         "concise": "Keep the letter tight, crisp, and efficient.",
     }.get(tone, "Use a polished, confident professional tone.")
 
-    draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
+    draft, source_ids, retrieved_chunks = await generate_cover_letter_with_rag_async(
         req.job_description,
         resume_context or req.job_description[:500],
         company_name=req.company,

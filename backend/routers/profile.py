@@ -12,7 +12,7 @@ from backend.database import get_db
 from sqlalchemy.orm import Session
 from backend.models import Job, UserProfile
 
-router = APIRouter(prefix="/api", tags=["Profile"])
+router = APIRouter(tags=["Profile"])
 
 
 def _extract_text_from_upload(upload: UploadFile) -> str:
@@ -118,7 +118,12 @@ async def upload_profile(
         documents.append(c)
 
     if documents:
-        embs = embedding_model.encode(documents, convert_to_numpy=True)
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            embs = await loop.run_in_executor(None, lambda: embedding_model.encode(documents, convert_to_numpy=True))
+        except RuntimeError:
+            embs = embedding_model.encode(documents, convert_to_numpy=True)
         embeddings = [e.tolist() for e in embs]
         # lazy get chroma collection
         try:
@@ -248,7 +253,7 @@ def build_resume_api(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.post('/cover_letter/{job_id}')
-def cover_letter_api(job_id: int, db: Session = Depends(get_db)):
+async def cover_letter_api(job_id: int, db: Session = Depends(get_db)):
     profile = db.query(UserProfile).first()
     profile_text = profile.resume_text if profile and profile.resume_text else '\n'.join(_get_profile_docs())
 
@@ -258,8 +263,8 @@ def cover_letter_api(job_id: int, db: Session = Depends(get_db)):
 
     # Use existing generate_cover_letter_with_rag but pass profile_text as resume_summary
     try:
-        from core.rag_service import generate_cover_letter_with_rag
-        draft, source_ids, retrieved = generate_cover_letter_with_rag(
+        from core.rag_service import generate_cover_letter_with_rag_async
+        draft, source_ids, retrieved = await generate_cover_letter_with_rag_async(
             job.description or '',
             profile_text,
             company_name=job.company or '',

@@ -71,11 +71,8 @@ def get_openrouter_client() -> OpenAI:
     return _openrouter_client
 
 
-def retrieve_relevant_chunks(job_text: str, k: int = 5, where: Optional[Dict[str, Any]] = None) -> List[RetrievedChunk]:
+def _query_collection_with_embedding(query_embedding: List[float], k: int, where: Optional[Dict[str, Any]]) -> List[RetrievedChunk]:
     collection = get_chroma_collection()
-    embedding_model = get_embedding_model()
-    query_embedding = embedding_model.encode([job_text], convert_to_numpy=True)[0].tolist()
-
     query_kwargs: Dict[str, Any] = {"query_embeddings": [query_embedding], "n_results": k}
     if where:
         query_kwargs["where"] = where
@@ -97,6 +94,21 @@ def retrieve_relevant_chunks(job_text: str, k: int = 5, where: Optional[Dict[str
             )
         )
     return chunks
+
+
+def retrieve_relevant_chunks(job_text: str, k: int = 5, where: Optional[Dict[str, Any]] = None) -> List[RetrievedChunk]:
+    embedding_model = get_embedding_model()
+    query_embedding = embedding_model.encode([job_text], convert_to_numpy=True)[0].tolist()
+    return _query_collection_with_embedding(query_embedding, k, where)
+
+
+async def retrieve_relevant_chunks_async(job_text: str, k: int = 5, where: Optional[Dict[str, Any]] = None) -> List[RetrievedChunk]:
+    import asyncio
+    embedding_model = get_embedding_model()
+    loop = asyncio.get_running_loop()
+    embs = await loop.run_in_executor(None, lambda: embedding_model.encode([job_text], convert_to_numpy=True))
+    query_embedding = embs[0].tolist()
+    return _query_collection_with_embedding(query_embedding, k, where)
 
 
 def _format_evidence(chunks: Sequence[RetrievedChunk]) -> str:
@@ -141,17 +153,14 @@ Requirements:
 """
 
 
-def generate_cover_letter_with_rag(
+def _generate_cover_letter_with_prompt(
+    retrieved: List[RetrievedChunk],
     job_text: str,
     resume_summary: str,
-    *,
-    company_name: str = "",
-    role: str = "",
-    tone: str = "professional",
-    top_k: int = 5,
-    metadata_filter: Optional[Dict[str, Any]] = None,
+    company_name: str,
+    role: str,
+    tone: str,
 ) -> Tuple[str, List[str], List[RetrievedChunk]]:
-    retrieved = retrieve_relevant_chunks(job_text, k=top_k, where=metadata_filter)
     prompt = build_cover_letter_prompt(
         job_text=job_text,
         resume_summary=resume_summary,
@@ -176,6 +185,34 @@ def generate_cover_letter_with_rag(
     source_ids = [chunk.metadata.get("source_id") or chunk.metadata.get("source") or chunk.id for chunk in retrieved]
     source_ids = [str(item) for item in source_ids if item]
     return cover_letter, source_ids, retrieved
+
+
+def generate_cover_letter_with_rag(
+    job_text: str,
+    resume_summary: str,
+    *,
+    company_name: str = "",
+    role: str = "",
+    tone: str = "professional",
+    top_k: int = 5,
+    metadata_filter: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, List[str], List[RetrievedChunk]]:
+    retrieved = retrieve_relevant_chunks(job_text, k=top_k, where=metadata_filter)
+    return _generate_cover_letter_with_prompt(retrieved, job_text, resume_summary, company_name, role, tone)
+
+
+async def generate_cover_letter_with_rag_async(
+    job_text: str,
+    resume_summary: str,
+    *,
+    company_name: str = "",
+    role: str = "",
+    tone: str = "professional",
+    top_k: int = 5,
+    metadata_filter: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, List[str], List[RetrievedChunk]]:
+    retrieved = await retrieve_relevant_chunks_async(job_text, k=top_k, where=metadata_filter)
+    return _generate_cover_letter_with_prompt(retrieved, job_text, resume_summary, company_name, role, tone)
 
 
 def save_cover_letter_artifacts(
