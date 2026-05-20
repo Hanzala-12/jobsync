@@ -52,6 +52,8 @@ export const profileAPI = {
   select: (id) => apiClient.post('/profile/select', { profile_id: id }),
   get: (id) => apiClient.get(`/profile/${id}`),
   update: (id, formData) => apiClient.patch(`/profile/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  list: (page = 1, per_page = 10) => apiClient.get('/profile', { params: { page, per_page } }),
+  delete: (id) => apiClient.delete(`/profile/${id}`),
 }
 
 export const apiActions = {

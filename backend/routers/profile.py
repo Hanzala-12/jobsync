@@ -145,15 +145,15 @@ async def upload_profile(
 
 
 @router.get('/profile')
-def profile_exists(db: Session = Depends(get_db)):
-    # Return saved profiles and whether a profile is selected/exists.
-    profiles = []
+def profile_list(page: int = 1, per_page: int = 10, db: Session = Depends(get_db)):
+    # Paginated list of profiles
     try:
-        rows = db.query(UserProfile).order_by(UserProfile.created_at.desc()).limit(20).all()
-        for r in rows:
-            profiles.append({"id": r.id, "skills": r.skills or '', "created_at": r.created_at.isoformat() if r.created_at else None})
+        query = db.query(UserProfile).order_by(UserProfile.created_at.desc())
+        total = query.count()
+        rows = query.offset((page - 1) * per_page).limit(per_page).all()
+        profiles = [{"id": r.id, "skills": r.skills or '', "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]
     except Exception:
-        profiles = []
+        return JSONResponse({"error": "Failed to list profiles"}, status_code=500)
 
     # try chroma as a best-effort exists flag
     try:
@@ -169,7 +169,7 @@ def profile_exists(db: Session = Depends(get_db)):
             docs = (res.get('documents') or [])
             exists = len(docs) > 0
     except Exception:
-        exists = len(profiles) > 0
+        exists = total > 0
 
     # read selected profile id if set
     selected_id = None
@@ -182,7 +182,7 @@ def profile_exists(db: Session = Depends(get_db)):
     except Exception:
         selected_id = None
 
-    return {"exists": exists or len(profiles) > 0, "profiles": profiles, "selected_profile_id": selected_id}
+    return {"exists": exists or total > 0, "profiles": profiles, "selected_profile_id": selected_id, "page": page, "per_page": per_page, "total": total}
 
 
 @router.post('/profile/select')
@@ -209,6 +209,29 @@ def get_profile(profile_id: int, db: Session = Depends(get_db)):
         return {"id": profile.id, "skills": profile.skills, "resume_text": profile.resume_text, "created_at": profile.created_at.isoformat() if profile.created_at else None}
     except Exception:
         return JSONResponse({"error": "Failed to load profile"}, status_code=500)
+
+
+@router.delete('/profile/{profile_id}')
+def delete_profile(profile_id: int, db: Session = Depends(get_db)):
+    try:
+        profile = db.query(UserProfile).filter(UserProfile.id == profile_id).first()
+        if not profile:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        db.delete(profile)
+        db.commit()
+        # if selected profile was this id, clear selection file
+        try:
+            sel_file = pathlib.Path(os.path.dirname(__file__)) / '..' / 'selected_profile.json'
+            sel_file = sel_file.resolve()
+            if sel_file.exists():
+                data = json.loads(sel_file.read_text(encoding='utf-8'))
+                if int(data.get('selected_profile_id', -1)) == profile_id:
+                    sel_file.unlink()
+        except Exception:
+            pass
+        return JSONResponse({"status": "success"})
+    except Exception:
+        return JSONResponse({"error": "Delete failed"}, status_code=500)
 
 @router.patch('/profile/{profile_id}')
 async def update_profile(profile_id: int,

@@ -14,6 +14,9 @@ export default function Profile() {
   const [selectedId, setSelectedId] = useState(null)
   const [editingProfileId, setEditingProfileId] = useState(null)
   const [previewText, setPreviewText] = useState('')
+  const [pageIndex, setPageIndex] = useState(1)
+  const [pageSize] = useState(6)
+  const [totalProfiles, setTotalProfiles] = useState(0)
 
   const submit = async (e) => {
     e.preventDefault()
@@ -57,10 +60,11 @@ export default function Profile() {
 
   const loadProfiles = async () => {
     try {
-      const res = await profileAPI.exists()
+      const res = await profileAPI.list(pageIndex, pageSize)
       const data = res.data || {}
       setProfiles(data.profiles || [])
       setSelectedId(data.selected_profile_id || null)
+      setTotalProfiles(data.total || 0)
     } catch (e) {
       setProfiles([])
     }
@@ -78,6 +82,42 @@ export default function Profile() {
     } catch (e) {
       setMessage('Failed to select profile')
     }
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete profile?')) return
+    try {
+      await profileAPI.delete(id)
+      setMessage('Deleted profile ' + id)
+      // reload current page
+      await loadProfiles()
+      if (selectedId === id) setSelectedId(null)
+    } catch (e) {
+      setMessage('Failed to delete')
+    }
+  }
+
+  useEffect(() => { loadProfiles() }, [pageIndex])
+
+  // parse stored resume_text to prefill fields when editing
+  const parseProfileText = (text) => {
+    const out = { skills: '', degree: '', years: '', interests: '', resume: '' }
+    if (!text) return out
+    const lines = text.split(/\r?\n/)
+    let captureResume = false
+    const resumeParts = []
+    for (const line of lines) {
+      const l = line.trim()
+      if (!l) continue
+      if (l.toLowerCase().startsWith('skills:')) out.skills = l.substring(7).trim()
+      else if (l.toLowerCase().startsWith('degree:')) out.degree = l.substring(7).trim()
+      else if (l.toLowerCase().startsWith('years experience:')) out.years = l.substring(17).trim()
+      else if (l.toLowerCase().startsWith('interests:')) out.interests = l.substring(10).trim()
+      else if (l.toLowerCase().startsWith('resume text:')) { captureResume = true; resumeParts.push(l.substring(12).trim()) }
+      else if (captureResume) resumeParts.push(l)
+    }
+    out.resume = resumeParts.join('\n')
+    return out
   }
 
   // fetch and show full profile on selection (preview)
@@ -99,10 +139,23 @@ export default function Profile() {
   }, [selectedId])
 
   const handleEdit = (p) => {
-    // Pre-fill fields for editing (best-effort)
-    setSkills(p.skills || '')
-    setEditingProfileId(p.id)
-    setMessage('Editing profile ' + p.id + '. Saving will create a new profile version.')
+    ;(async () => {
+      try {
+        const res = await profileAPI.get(p.id)
+        if (res && res.data) {
+          const parsed = parseProfileText(res.data.resume_text || '')
+          setSkills(parsed.skills || '')
+          setDegree(parsed.degree || '')
+          setYears(parsed.years || 0)
+          setInterests(parsed.interests || '')
+          setPreviewText(parsed.resume || '')
+          setEditingProfileId(p.id)
+          setMessage('Editing profile ' + p.id)
+        }
+      } catch (e) {
+        setMessage('Failed to load profile for editing')
+      }
+    })()
   }
 
   return (
@@ -126,10 +179,18 @@ export default function Profile() {
                   <div className="profile-actions">
                     <button type="button" className="btn" onClick={() => handleSelect(p.id)}>{selectedId === p.id ? 'Selected' : 'Select'}</button>
                     <button type="button" className="btn" onClick={() => handleEdit(p)}>Edit</button>
+                    <button type="button" className="btn" onClick={() => handleDelete(p.id)}>Delete</button>
                   </div>
                 </div>
               ))
             )}
+          </div>
+          <div className="profiles-pager" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <div>
+              <button className="btn" type="button" onClick={() => setPageIndex(Math.max(1, pageIndex - 1))}>Previous</button>
+              <button className="btn" type="button" onClick={() => setPageIndex(pageIndex + 1)} style={{ marginLeft: 8 }}>Next</button>
+            </div>
+            <div className="muted-text">Page {pageIndex} · {totalProfiles} profiles</div>
           </div>
           {previewText && (
             <div className="profile-preview" style={{ marginTop: 12 }}>
