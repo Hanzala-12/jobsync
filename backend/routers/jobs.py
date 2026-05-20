@@ -332,6 +332,27 @@ Give:
 Respond as JSON: {{"percentage": number, "explanation": "string", "missing_skills": ["..."]}}"""
 
     llm = LLMProvider()
+    # If no LLM provider is configured, use a simple local heuristic based on
+    # keyword overlap so Match still works offline.
+    if not getattr(llm, 'provider_type', None):
+        import re as _re
+
+        def _words(text: str):
+            return set([w for w in _re.findall(r"[a-zA-Z0-9+#.+]+", (text or "").lower()) if len(w) > 2])
+
+        profile = db.query(UserProfile).first()
+        resume_text = profile.resume_text if profile and profile.resume_text else ""
+        resume_words = _words(resume_text)
+        job_words = _words(job.description or "")
+        if not job_words:
+            return JobMatch(job_id=job_id, match_percentage=0.0, explanation="No job description text to analyze", missing_skills=[])
+
+        overlap = resume_words & job_words
+        match_pct = int(min(100, (len(overlap) / max(1, len(job_words))) * 100))
+        missing = sorted(list((job_words - resume_words)))[:12]
+        explanation = f"Heuristic match based on keyword overlap: {len(overlap)} of {len(job_words)} job keywords found in resume."
+        return JobMatch(job_id=job_id, match_percentage=float(match_pct), explanation=explanation, missing_skills=missing)
+
     raw = llm.ask("You are a hiring expert.", prompt)
     # If the provider returned an explicit error string, propagate it as a 503
     if isinstance(raw, str) and raw.startswith("AI error:"):
