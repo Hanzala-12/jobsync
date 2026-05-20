@@ -194,8 +194,9 @@ function Jobs() {
     let mounted = true
     ;(async () => {
       try {
-        const res = await profileAPI.exists()
-        if (mounted) setProfileExists(Boolean(res.data?.exists))
+        const res = await profileAPI.list(1, 10)
+        // API returns { exists, profiles, selected_profile_id, ... }
+        if (mounted) setProfileExists(Boolean(res.data?.exists || (res.data?.selected_profile_id !== null)))
       } catch (e) {
         if (mounted) setProfileExists(false)
       }
