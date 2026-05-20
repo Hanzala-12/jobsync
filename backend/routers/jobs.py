@@ -14,10 +14,11 @@ from backend.schemas import (
     SalaryEstimateRequest,
     SalaryEstimateResponse,
 )
-from backend.services.job_apis import clean_text, search_jobs
+from backend.services.job_apis import clean_text, get_pakistan_source_status, search_jobs
 from core.deduplicator import process_incoming_job
 from core.llm_provider import LLMProvider
 from core.normalizer import normalize_job
+from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -55,6 +56,8 @@ def _extract_json(response: str, fallback):
 
 def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
     saved_jobs: List[Job] = []
+    profile = db.query(UserProfile).first()
+    resume_summary = profile.resume_text[:1500] if profile and profile.resume_text else ""
 
     for job in jobs:
         raw_job = {
@@ -72,6 +75,32 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
         normalized = normalize_job(raw_job, str(job.get("source") or "unknown"))
         saved_job, _ = process_incoming_job(db, normalized)
         saved_jobs.append(saved_job)
+
+        if resume_summary and saved_job and getattr(saved_job, "id", None):
+            try:
+                draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
+                    saved_job.description or raw_job["description"],
+                    resume_summary,
+                    company_name=saved_job.company or raw_job["company"],
+                    role=saved_job.title or raw_job["title"],
+                    tone="professional",
+                    top_k=5,
+                    metadata_filter={"company": saved_job.company} if saved_job.company else None,
+                )
+                save_cover_letter_artifacts(
+                    saved_job.id,
+                    draft,
+                    source_ids,
+                    retrieved_chunks,
+                    metadata={
+                        "company": saved_job.company,
+                        "role": saved_job.title,
+                        "source": saved_job.source,
+                        "job_url": saved_job.url,
+                    },
+                )
+            except Exception:
+                pass
 
     return saved_jobs
 
@@ -99,6 +128,11 @@ def search_jobs_endpoint(
         job["description"] = clean_text(job.get("description", ""))
 
     return _upsert_jobs(db, jobs)
+
+
+@router.get("/sources")
+def sources_status():
+    return {"sources": get_pakistan_source_status()}
 
 
 @router.get("/{job_id}/match", response_model=JobMatch)
@@ -203,3 +237,39 @@ Return JSON only:
         negotiation_tip=str(data.get("negotiation_tip", "")),
         top_paying_companies=[str(item) for item in (data.get("top_paying_companies") or [])][:3],
     )
+
+
+@router.get("/autocomplete")
+def autocomplete_keywords(query: str = "", db: Session = Depends(get_db)):
+    """Return matching job keywords for autocomplete dropdown from config + stored jobs."""
+    from config.pakistan_jobs_config import KEYWORDS
+    from backend.models import Job
+    
+    if not query or len(query) < 1:
+        return {"suggestions": []}
+    
+    query_lower = query.lower().strip()
+    matches = set()
+    
+    # 1. Filter config keywords
+    for keyword in KEYWORDS:
+        keyword_lower = keyword.lower()
+        if keyword_lower.startswith(query_lower) or query_lower in keyword_lower:
+            matches.add(keyword)
+    
+    # 2. Add job titles from database that match query
+    try:
+        db_jobs = db.query(Job.title).filter(
+            Job.title.ilike(f"%{query_lower}%")
+        ).distinct().limit(20).all()
+        for (title,) in db_jobs:
+            if title and len(title) < 100:  # Avoid overly long titles
+                matches.add(title)
+    except Exception:
+        pass
+    
+    # Sort by relevance (exact prefix matches first)
+    sorted_matches = sorted(matches, key=lambda k: (not k.lower().startswith(query_lower), k))
+    
+    # Return top 15 matches (more now that we include DB jobs)
+    return {"suggestions": sorted_matches[:15]}

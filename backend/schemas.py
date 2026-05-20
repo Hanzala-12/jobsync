@@ -1,6 +1,8 @@
 ﻿from datetime import datetime
 from typing import Dict, List, Optional
 
+from pydantic import Field
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -192,6 +194,7 @@ class CoverLetterRequest(BaseModel):
 
 class CoverLetterResponse(BaseModel):
     draft: str
+    source_ids: List[str] = Field(default_factory=list)
 
 
 class SkillGapRequest(BaseModel):

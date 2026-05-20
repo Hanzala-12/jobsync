@@ -8,6 +8,7 @@ from backend.services.job_apis import search_jobs
 from core.database import get_db
 from core.deduplicator import process_incoming_job
 from core.normalizer import normalize_job
+from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
 
 SCOUT_STATE: Dict[str, Any] = {
     "running": False,
@@ -41,7 +42,7 @@ def _score_jobs_fast(resume_text: str, jobs: list, role: str, skills: str, min_s
         title_hits = len(target_terms & title_terms)
 
         score = 45 + (title_hits * 15) + (target_hits * 6) + min(resume_hits * 3, 20)
-        if job.get("source") in {"rozee", "adzuna", "google_indexed", "mustakbil"}:
+        if job.get("source") in {"rozee", "adzuna", "google_indexed", "mustakbil", "brightspyre", "bing_jobs", "linkedin", "careers_page"}:
             score += 10
         score = max(0, min(100, score))
 
@@ -115,6 +116,31 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
                 duplicate_count += 1
             else:
                 saved_ids.append(saved_job.id)
+                if profile.resume_text and saved_job.id:
+                    try:
+                        draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
+                            saved_job.description or job.get("description", ""),
+                            profile.resume_text[:1500],
+                            company_name=saved_job.company or job.get("company", ""),
+                            role=saved_job.title or job.get("title", ""),
+                            tone="professional",
+                            top_k=5,
+                        )
+                        save_cover_letter_artifacts(
+                            saved_job.id,
+                            draft,
+                            source_ids,
+                            retrieved_chunks,
+                            metadata={
+                                "company": saved_job.company,
+                                "role": saved_job.title,
+                                "source": saved_job.source,
+                                "job_url": saved_job.url,
+                                "generated_by": "daily_scout",
+                            },
+                        )
+                    except Exception:
+                        pass
 
         discovered_jobs = [
             {

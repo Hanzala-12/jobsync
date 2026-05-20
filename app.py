@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from groq import Groq
 
+from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
+
 # Try to import PDF support (optional)
 try:
     import fitz  # PyMuPDF
@@ -329,33 +331,29 @@ Technical Questions:
 # UNIQUE FEATURES
 # ============================================================================
 
-def generate_cover_letter(job_text, resume_text, company_name, role):
-    """Generate cover letter"""
-    prompt = f"""Write a professional cover letter:
-
-Company: {company_name}
-Role: {role}
-
-Job: {job_text[:1500]}
-Resume: {resume_text[:1500]}
-
-Write 250-300 words."""
-    
-    llm_response = ask_llm(prompt, temperature=0.8)
-    
-    if llm_response:
-        return llm_response
-    else:
-        return f"""Dear Hiring Manager,
-
-I am interested in the {role} position at {company_name}.
-
-My skills align with your requirements. I am confident I can contribute effectively.
-
-Thank you for considering my application.
-
-Sincerely,
-[Your Name]"""
+def generate_cover_letter(job_text, resume_summary, company_name, role, job_id=None, tone="professional"):
+    """Generate a RAG-enhanced cover letter and persist provenance."""
+    cover_letter, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
+        job_text,
+        resume_summary,
+        company_name=company_name,
+        role=role,
+        tone=tone,
+        top_k=5,
+    )
+    save_cover_letter_artifacts(
+        job_id,
+        cover_letter,
+        source_ids,
+        retrieved_chunks,
+        metadata={
+            "company_name": company_name,
+            "role": role,
+            "job_text": job_text,
+            "resume_summary": resume_summary,
+        },
+    )
+    return cover_letter, source_ids
 
 
 def generate_linkedin_message(company_name, role):
@@ -654,7 +652,7 @@ def run_full_analysis():
     )
     
     print("Generating extras...")
-    cover_letter = generate_cover_letter(job_text, resume_text, "Company", "Role")
+    cover_letter, cover_letter_sources = generate_cover_letter(job_text, resume_text, "Company", "Role")
     linkedin_msg = generate_linkedin_message("Company", "Role")
     
     save_memory(
@@ -729,6 +727,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     save_text(os.path.join(OUTPUT_DIR, "interview_questions.txt"), questions_report)
     
     save_text(os.path.join(OUTPUT_DIR, "cover_letter.txt"), cover_letter)
+    save_text(os.path.join(OUTPUT_DIR, "cover_letter_sources.txt"), "\n".join(cover_letter_sources))
     save_text(os.path.join(OUTPUT_DIR, "linkedin_message.txt"), linkedin_msg)
     
     reminders = generate_reminders()
