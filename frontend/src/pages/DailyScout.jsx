@@ -5,6 +5,13 @@ import './DailyScout.css'
 
 const LOCATION_OPTIONS = ['Pakistan', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'UAE', 'UK', 'Remote']
 
+const resolveExternalJobUrl = (job) => {
+  const raw = String(job?.url || job?.apply_url || '').trim()
+  if (!raw) return ''
+  if (/^https?:\/\//i.test(raw)) return raw
+  return ''
+}
+
 function DailyScout() {
   const [role, setRole] = useState('software engineer')
   const [location, setLocation] = useState('Pakistan')
@@ -110,7 +117,11 @@ function DailyScout() {
             <p className="location">{job.location}</p>
             <p className="desc">{job.description}</p>
             <div className="job-actions">
-              <a href={job.url} target="_blank" rel="noreferrer">View Job {'->'}</a>
+              {resolveExternalJobUrl(job) ? (
+                <a href={resolveExternalJobUrl(job)} target="_blank" rel="noreferrer">View Job {'->'}</a>
+              ) : (
+                <button type="button" disabled title="No external job link provided">View Job {'->'}</button>
+              )}
               <Button size="small" variant="secondary" onClick={() => saveJob(job)}>Save to Tracker</Button>
             </div>
           </article>

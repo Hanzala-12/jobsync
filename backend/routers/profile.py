@@ -270,6 +270,11 @@ def profile_list(page: int = 1, per_page: int = 10, db: Session = Depends(get_db
         exists = total > 0
 
     selected_id = _get_selected_profile_id(db)
+    if selected_id:
+        exists_selected = db.query(UserProfile.id).filter(UserProfile.id == selected_id).first()
+        if not exists_selected:
+            _clear_selected_profile_if_matches(db, selected_id)
+            selected_id = None
 
     return {"exists": exists or total > 0, "profiles": profiles, "selected_profile_id": selected_id, "page": page, "per_page": per_page, "total": total}
 

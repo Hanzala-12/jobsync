@@ -8,7 +8,6 @@ from backend.services.job_apis import search_jobs
 from core.database import get_db
 from core.deduplicator import process_incoming_job
 from core.normalizer import normalize_job
-from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
 
 SCOUT_STATE: Dict[str, Any] = {
     "running": False,
@@ -118,6 +117,8 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
                 saved_ids.append(saved_job.id)
                 if profile.resume_text and saved_job.id:
                     try:
+                        from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
+
                         draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
                             saved_job.description or job.get("description", ""),
                             profile.resume_text[:1500],
