@@ -200,6 +200,56 @@ def select_profile(payload: dict = Body(...)):
     except Exception:
         return JSONResponse({"status": "error", "message": "could not persist selection"}, status_code=500)
 
+@router.get('/profile/{profile_id}')
+def get_profile(profile_id: int, db: Session = Depends(get_db)):
+    try:
+        profile = db.query(UserProfile).filter(UserProfile.id == profile_id).first()
+        if not profile:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        return {"id": profile.id, "skills": profile.skills, "resume_text": profile.resume_text, "created_at": profile.created_at.isoformat() if profile.created_at else None}
+    except Exception:
+        return JSONResponse({"error": "Failed to load profile"}, status_code=500)
+
+@router.patch('/profile/{profile_id}')
+async def update_profile(profile_id: int,
+                         skills: Optional[str] = Form(None),
+                         degree: Optional[str] = Form(None),
+                         years_experience: Optional[int] = Form(None),
+                         interests: Optional[str] = Form(None),
+                         resume: Optional[UploadFile] = File(None),
+                         db: Session = Depends(get_db)):
+    try:
+        profile = db.query(UserProfile).filter(UserProfile.id == profile_id).first()
+        if not profile:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+
+        # update fields if provided
+        parts = []
+        if skills is not None:
+            profile.skills = skills
+            parts.append(f"Skills: {skills}")
+        if degree is not None:
+            parts.append(f"Degree: {degree}")
+        if years_experience is not None:
+            parts.append(f"Years Experience: {years_experience}")
+        if interests is not None:
+            parts.append(f"Interests: {interests}")
+
+        resume_text = ''
+        if resume:
+            resume_text = _extract_text_from_upload(resume)
+            if resume_text:
+                parts.append(f"Resume text: {resume_text}")
+
+        if parts:
+            # merge with existing resume_text
+            new_text = '\n'.join(parts)
+            profile.resume_text = new_text
+
+        db.commit()
+        return JSONResponse({"status": "success", "message": "Profile updated"})
+    except Exception as e:
+        return JSONResponse({"error": "Update failed", "detail": str(e)}, status_code=500)
 
 def _extract_json(raw: str, fallback):
     if not raw:

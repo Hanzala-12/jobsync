@@ -50,6 +50,8 @@ export const profileAPI = {
     }),
   exists: () => apiClient.get('/profile'),
   select: (id) => apiClient.post('/profile/select', { profile_id: id }),
+  get: (id) => apiClient.get(`/profile/${id}`),
+  update: (id, formData) => apiClient.patch(`/profile/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 }
 
 export const apiActions = {

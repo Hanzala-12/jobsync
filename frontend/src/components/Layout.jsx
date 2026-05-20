@@ -1,5 +1,6 @@
 ﻿import { Link, useLocation } from 'react-router-dom'
 import './Layout.css'
+import searchStream from '../services/searchStream'
 
 const navGroups = [
   {
@@ -42,7 +43,10 @@ const Layout = ({ children }) => {
   return (
     <div className="layout-shell">
       <aside className="sidebar">
-        <div className="logo">JobSync</div>
+        <div className="logo">
+          <span>JobSync</span>
+          <button className="stop-search-btn" onClick={() => { try { searchStream.stop(); alert('Search stopped') } catch (e) {} }}>Stop Search</button>
+        </div>
         <nav>
           {navGroups.map((group) => (
             <div key={group.label} className="nav-group">

@@ -20,6 +20,21 @@
   border-bottom: 1px solid var(--border);
 }
 
+.logo .stop-search-btn {
+  margin-left: 12px;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.logo .stop-search-btn:hover {
+  background: var(--bg-hover);
+}
+
 .nav-group {
   padding-bottom: 8px;
 }

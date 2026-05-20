@@ -13,6 +13,7 @@ export default function Profile() {
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [editingProfileId, setEditingProfileId] = useState(null)
+  const [previewText, setPreviewText] = useState('')
 
   const submit = async (e) => {
     e.preventDefault()
@@ -25,12 +26,18 @@ export default function Profile() {
       fd.append('years_experience', String(years))
       fd.append('interests', interests)
       if (resumeFile) fd.append('resume', resumeFile)
-      const res = await profileAPI.create(fd)
-      setMessage(res.data?.message || 'Profile saved')
-      // if backend returned created id, select it
-      const newId = res.data?.id
-      if (newId) {
-        try { await profileAPI.select(newId); setSelectedId(newId) } catch (e) { /* ignore */ }
+      let res
+      if (editingProfileId) {
+        res = await profileAPI.update(editingProfileId, fd)
+        setMessage(res.data?.message || 'Profile updated')
+      } else {
+        res = await profileAPI.create(fd)
+        setMessage(res.data?.message || 'Profile saved')
+        // if backend returned created id, select it
+        const newId = res.data?.id
+        if (newId) {
+          try { await profileAPI.select(newId); setSelectedId(newId) } catch (e) { /* ignore */ }
+        }
       }
       // refresh profiles list
       await loadProfiles()
@@ -73,6 +80,24 @@ export default function Profile() {
     }
   }
 
+  // fetch and show full profile on selection (preview)
+  useEffect(() => {
+    if (!selectedId) {
+      setPreviewText('')
+      return
+    }
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await profileAPI.get(selectedId)
+        if (mounted && res && res.data) setPreviewText(res.data.resume_text || '')
+      } catch (e) {
+        if (mounted) setPreviewText('')
+      }
+    })()
+    return () => { mounted = false }
+  }, [selectedId])
+
   const handleEdit = (p) => {
     // Pre-fill fields for editing (best-effort)
     setSkills(p.skills || '')
@@ -106,6 +131,12 @@ export default function Profile() {
               ))
             )}
           </div>
+          {previewText && (
+            <div className="profile-preview" style={{ marginTop: 12 }}>
+              <h4>Resume Preview</h4>
+              <div style={{ whiteSpace: 'pre-wrap', background: 'white', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>{previewText}</div>
+            </div>
+          )}
         <div className="form-row">
           <label className="field-label">Skills (comma separated)</label>
           <textarea className="field-input" value={skills} onChange={(e) => setSkills(e.target.value)} />
