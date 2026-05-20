@@ -21,6 +21,13 @@ const countryMap = {
   Remote: 'pk',
 }
 
+const resolveExternalJobUrl = (job) => {
+  const raw = String(job?.url || job?.apply_url || '').trim()
+  if (!raw) return ''
+  if (/^https?:\/\//i.test(raw)) return raw
+  return ''
+}
+
 function Jobs() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('software engineer')
@@ -344,7 +351,11 @@ function Jobs() {
             <p className="job-description">{job.description || 'No description available.'}</p>
             <div className="divider" />
             <div className="job-actions">
-              <a href={job.url} target="_blank" rel="noreferrer">View Job {'->'}</a>
+              {resolveExternalJobUrl(job) ? (
+                <a href={resolveExternalJobUrl(job)} target="_blank" rel="noreferrer">View Job {'->'}</a>
+              ) : (
+                <button type="button" disabled title="No external job link provided">View Job {'->'}</button>
+              )}
               <button
                 type="button"
                 onClick={() => openMatch(job)}
