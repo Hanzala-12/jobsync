@@ -22,7 +22,7 @@ const countryMap = {
 }
 
 const resolveExternalJobUrl = (job) => {
-  const raw = String(job?.url || job?.apply_url || '').trim()
+  const raw = String(job?.url || job?.apply_url || job?.external_id || '').trim()
   if (!raw) return ''
   if (/^https?:\/\//i.test(raw)) return raw
   return ''

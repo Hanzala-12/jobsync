@@ -37,6 +37,26 @@ _MAX_BG_WORKERS = max(1, int(os.getenv("MAX_BG_WORKERS", "5")))
 _BG_EXECUTOR = ThreadPoolExecutor(max_workers=_MAX_BG_WORKERS, thread_name_prefix="jobsync-bg")
 
 
+def _resolve_job_url(job: dict) -> str:
+    primary = str(job.get("url") or "").strip()
+    apply_url = str(job.get("apply_url") or "").strip()
+    external_id = str(job.get("external_id") or "").strip()
+
+    for candidate in (primary, apply_url, external_id):
+        if candidate.startswith("http://") or candidate.startswith("https://"):
+            return candidate
+    return ""
+
+
+def _normalize_stream_job(job: dict) -> dict:
+    normalized = dict(job or {})
+    resolved_url = _resolve_job_url(normalized)
+    if resolved_url:
+        normalized["url"] = resolved_url
+        normalized["apply_url"] = str(normalized.get("apply_url") or resolved_url)
+    return normalized
+
+
 def shutdown_background_executor():
     try:
         _BG_EXECUTOR.shutdown(wait=False, cancel_futures=True)
@@ -85,14 +105,15 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
         _logger.warning("Cover letter generation enabled – search may be slower.")
 
     for job in jobs:
+        resolved_url = _resolve_job_url(job)
         raw_job = {
             "title": clean_text(str(job.get("title") or "")),
             "company": clean_text(str(job.get("company") or "")),
             "city": job.get("city") or job.get("location") or "",
             "location": job.get("location") or job.get("city") or "",
             "description": clean_text(str(job.get("description") or "")),
-            "apply_url": job.get("apply_url") or job.get("url") or "",
-            "url": job.get("url") or job.get("apply_url") or "",
+            "apply_url": job.get("apply_url") or job.get("url") or resolved_url,
+            "url": job.get("url") or job.get("apply_url") or resolved_url,
             "posted_date": job.get("posted_date") or "",
             "salary": job.get("salary") or "",
             "external_id": str(job.get("external_id") or job.get("url") or "").strip() or None,
@@ -278,6 +299,7 @@ def search_jobs_stream(
 
                     new = []
                     for job in res:
+                        job = _normalize_stream_job(job)
                         key = job.get('external_id') or f"{job.get('title')}::{job.get('company')}::{job.get('url')}"
                         if key in seen_keys:
                             continue
@@ -297,6 +319,7 @@ def search_jobs_stream(
                     indexed = _services.job_apis.fetch_indexed_pakistan(query, city or location, max_urls=6)
                     new = []
                     for job in indexed:
+                        job = _normalize_stream_job(job)
                         key = job.get('external_id') or f"{job.get('title')}::{job.get('company')}::{job.get('url')}"
                         if key in seen_keys:
                             continue
