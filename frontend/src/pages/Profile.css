@@ -27,6 +27,44 @@
   gap: 12px;
 }
 
+.profiles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.profile-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid var(--border);
+}
+
+.profile-item.active {
+  border-color: var(--accent);
+  box-shadow: 0 1px 0 rgba(37,99,235,0.08);
+}
+
+.profile-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-skills {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .form-row {
   display: flex;
   flex-direction: column;

@@ -1,9 +1,10 @@
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
 import MatchPanel from '../components/MatchPanel'
 import { applicationsAPI, jobsAPI, profileAPI, apiActions } from '../api/client'
+import searchStream from '../services/searchStream'
 import './Jobs.css'
 
 const LOCATION_OPTIONS = ['Pakistan', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'UAE', 'UK', 'Remote']
@@ -45,11 +46,10 @@ function Jobs() {
   const [salaryData, setSalaryData] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const esRef = useRef(null)
 
   const localCount = useMemo(() => jobs.filter((job) => job.source === 'adzuna').length, [jobs])
   const remoteCount = useMemo(() => jobs.filter((job) => job.source !== 'adzuna').length, [jobs])
-  const resultText = useMemo(() => `${jobs.length} jobs found for "${query}"`, [jobs, query])
+    setJobs([])
 
   const isCitySearch = PAK_CITIES.includes(location)
 
@@ -60,76 +60,27 @@ function Jobs() {
         const response = await jobsAPI.autocomplete(value)
         setSuggestions(response.data?.suggestions || [])
         setShowSuggestions(true)
-      } catch {
-        setSuggestions([])
-      }
-    } else {
-      setSuggestions([])
-      setShowSuggestions(false)
-    }
-  }
-
-  const selectSuggestion = (suggestion) => {
-    setQuery(suggestion)
-    setSuggestions([])
-    setShowSuggestions(false)
-  }
-
-  const search = async () => {
-    setLoading(true)
-    setError('')
-    setJobs([])
-    setSalaryCard(null)
-    setSalaryData(null)
-      setStreamingCount(0)
-      setStreamElapsed(0)
-      const selectedRemote = remoteOnly || location === 'Remote'
-      const API_BASE = import.meta.env.VITE_API_URL || '/api'
-      const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
-      const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}`
-
-      try {
-        // Close any previous stream before opening a new one
-        if (esRef.current) {
-          try { esRef.current.close() } catch (e) { /* ignore */ }
-          esRef.current = null
-        }
-        const es = new EventSource(url)
-        esRef.current = es
-        const seen = new Set()
-      
-        es.onmessage = (evt) => {
-          try {
-            const data = JSON.parse(evt.data)
-          
-            // Update streaming count and elapsed time
-            if (typeof data.combined_count === 'number') {
-              setStreamingCount(data.combined_count)
-            }
-            if (typeof data.elapsed === 'number') {
-              setStreamElapsed(data.elapsed)
-            }
-          
-            // Add partial results
-            if (data.partial && Array.isArray(data.partial)) {
-              const newJobs = []
-              for (const j of data.partial) {
+        // Start or reuse shared background stream so it continues across navigation
+        searchStream.start(url)
+        setLoading(true)
+      } catch (e) {
                 const k = j.external_id || j.url || `${j.title}-${j.company}`
                 if (!seen.has(k)) {
                   seen.add(k)
                   newJobs.push(j)
                 }
               }
-            
-              if (newJobs.length > 0) {
-                setJobs((prev) => [...prev, ...newJobs])
-              }
-            }
-          
-            // Check if done
-            if (data.done) {
-              setLoading(false)
-              try { es.close() } catch (e) { /* ignore */ }
+
+  // Subscribe to shared search stream updates. Unsubscribe on unmount but keep stream running.
+  useEffect(() => {
+    const unsub = searchStream.subscribe((s) => {
+      setJobs(s.jobs || [])
+      setStreamingCount(s.streamingCount || 0)
+      setStreamElapsed(s.streamElapsed || 0)
+      setLoading(Boolean(s.loading))
+    })
+    return () => { unsub() }
+  }, [])
               if (esRef.current === es) esRef.current = null
             }
           } catch (e) {

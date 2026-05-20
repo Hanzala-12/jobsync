@@ -49,6 +49,7 @@ export const profileAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   exists: () => apiClient.get('/profile'),
+  select: (id) => apiClient.post('/profile/select', { profile_id: id }),
 }
 
 export const apiActions = {
