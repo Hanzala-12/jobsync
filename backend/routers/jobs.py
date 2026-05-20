@@ -332,8 +332,13 @@ Give:
 Respond as JSON: {{"percentage": number, "explanation": "string", "missing_skills": ["..."]}}"""
 
     llm = LLMProvider()
+    raw = llm.ask("You are a hiring expert.", prompt)
+    # If the provider returned an explicit error string, propagate it as a 503
+    if isinstance(raw, str) and raw.startswith("AI error:"):
+        return JSONResponse({"error": raw}, status_code=503)
+
     data = _extract_json(
-        llm.ask("You are a hiring expert.", prompt),
+        raw,
         {"percentage": 0, "explanation": "Failed to parse AI response", "missing_skills": []},
     )
 
