@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.database import engine, Base
 from backend.routers import resume, jobs, applications, cover_letter, intelligence
-from backend.routers import kanban, voice_interview, browser_extension, followup, daily_scout
+from backend.routers import kanban, voice_interview, browser_extension, followup
 import importlib
 profile = importlib.import_module('backend.routers.profile')
 from core.scheduler import start_scheduler_if_enabled
@@ -60,7 +60,11 @@ app.include_router(kanban.router)
 app.include_router(voice_interview.router)
 app.include_router(browser_extension.router)
 app.include_router(followup.router)
-app.include_router(daily_scout.router)
+try:
+    from backend.routers import daily_scout
+    app.include_router(daily_scout.router)
+except Exception:
+    logger.exception("daily_scout router unavailable; continuing without it")
 
 
 @app.exception_handler(HTTPException)

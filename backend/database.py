@@ -5,7 +5,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 _repo_root = Path(__file__).resolve().parents[1]
-_default_sqlite_path = (_repo_root / "jobsync.db").resolve()
+
+if os.getenv("VERCEL"):
+    # Vercel filesystem is ephemeral/read-only outside /tmp for serverless functions.
+    _default_sqlite_path = Path("/tmp/jobsync.db")
+else:
+    _default_sqlite_path = (_repo_root / "jobsync.db").resolve()
+
 _default_database_url = f"sqlite:///{_default_sqlite_path.as_posix()}"
 
 DATABASE_URL = os.getenv("DATABASE_URL", _default_database_url)
