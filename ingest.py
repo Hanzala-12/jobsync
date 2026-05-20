@@ -3,8 +3,6 @@ import json
 import glob
 import uuid
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
-import chromadb
 
 load_dotenv()
 
@@ -55,6 +53,9 @@ def load_seed_files(seed_dir=SEED_DIR):
     return docs
 
 def main():
+    from sentence_transformers import SentenceTransformer
+    import chromadb
+
     print("Starting ingestion...")
     model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
