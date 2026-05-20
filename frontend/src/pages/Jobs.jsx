@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
@@ -45,6 +45,7 @@ function Jobs() {
   const [salaryData, setSalaryData] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const esRef = useRef(null)
 
   const localCount = useMemo(() => jobs.filter((job) => job.source === 'adzuna').length, [jobs])
   const remoteCount = useMemo(() => jobs.filter((job) => job.source !== 'adzuna').length, [jobs])
@@ -80,55 +81,85 @@ function Jobs() {
     setJobs([])
     setSalaryCard(null)
     setSalaryData(null)
-    const selectedRemote = remoteOnly || location === 'Remote'
-    const API_BASE = import.meta.env.VITE_API_URL || '/api'
-    const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
-    const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}`
+      setStreamingCount(0)
+      setStreamElapsed(0)
+      const selectedRemote = remoteOnly || location === 'Remote'
+      const API_BASE = import.meta.env.VITE_API_URL || '/api'
+      const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
+      const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}`
 
-    try {
-      const es = new EventSource(url)
-      const seen = new Set()
-      es.onmessage = (evt) => {
-        try {
-          const data = JSON.parse(evt.data)
-          if (data.partial) {
-            // merge incoming partials into current list with dedupe
-            setJobs((prev) => {
-              const merged = [...prev]
+      try {
+        // Close any previous stream before opening a new one
+        if (esRef.current) {
+          try { esRef.current.close() } catch (e) { /* ignore */ }
+          esRef.current = null
+        }
+        const es = new EventSource(url)
+        esRef.current = es
+        const seen = new Set()
+      
+        es.onmessage = (evt) => {
+          try {
+            const data = JSON.parse(evt.data)
+          
+            // Update streaming count and elapsed time
+            if (typeof data.combined_count === 'number') {
+              setStreamingCount(data.combined_count)
+            }
+            if (typeof data.elapsed === 'number') {
+              setStreamElapsed(data.elapsed)
+            }
+          
+            // Add partial results
+            if (data.partial && Array.isArray(data.partial)) {
+              const newJobs = []
               for (const j of data.partial) {
                 const k = j.external_id || j.url || `${j.title}-${j.company}`
                 if (!seen.has(k)) {
                   seen.add(k)
-                  merged.push(j)
+                  newJobs.push(j)
                 }
               }
-              return merged
-            })
+            
+              if (newJobs.length > 0) {
+                setJobs((prev) => [...prev, ...newJobs])
+              }
+            }
+          
+            // Check if done
+            if (data.done) {
+              setLoading(false)
+              try { es.close() } catch (e) { /* ignore */ }
+              if (esRef.current === es) esRef.current = null
+            }
+          } catch (e) {
+            console.error('Parse error in stream:', e)
           }
-          if (typeof data.combined_count === 'number') {
-            setStreamingCount(data.combined_count)
-          }
-          if (typeof data.elapsed === 'number') {
-            setStreamElapsed(data.elapsed)
-          }
-          if (data.done) {
-            setLoading(false)
-            es.close()
-          }
-        } catch (e) {
-          // ignore parse errors
         }
-      }
-      es.onerror = (err) => {
+      
+        es.onerror = (err) => {
+          console.error('EventSource error:', err)
+          setLoading(false)
+          try { es.close() } catch (e) { /* ignore */ }
+          if (esRef.current === es) esRef.current = null
+        }
+      } catch (e) {
+        console.error('Search error:', e)
+        setError('Could not fetch jobs. Please try again.')
+        setJobs([])
         setLoading(false)
-        es.close()
       }
-    } catch (e) {
-      setError('Could not fetch jobs. Please try again.')
-      setJobs([])
-      setLoading(false)
-    }
   }
+
+  // Clean up EventSource when leaving page
+  useEffect(() => {
+    return () => {
+      if (esRef.current) {
+        try { esRef.current.close() } catch (e) { /* ignore */ }
+        esRef.current = null
+      }
+    }
+  }, [])
 
   const saveToTracker = async (job) => {
     const created = await applicationsAPI.create({

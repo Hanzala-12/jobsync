@@ -1,0 +1,127 @@
+:root {
+  --form-max-width: 880px;
+}
+
+.profile-page {
+  padding: 28px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.profile-page .page-header {
+  max-width: var(--form-max-width);
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.profile-form {
+  width: 100%;
+  max-width: var(--form-max-width);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(16,24,40,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-row.two-col {
+  flex-direction: row;
+  gap: 12px;
+}
+
+.form-row.two-col .col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.field-input {
+  background: white;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  min-height: 40px;
+}
+
+.field-input[type="number"] {
+  max-width: 160px;
+}
+
+.field-input[type="file"] {
+  padding: 6px 8px;
+}
+
+.file-input {
+  background: transparent;
+  padding: 6px 8px;
+}
+
+textarea.field-input {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn.primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.muted-text {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.message {
+  max-width: var(--form-max-width);
+  margin: 12px auto 0 auto;
+}
+
+@media (max-width: 720px) {
+  .form-row.two-col {
+    flex-direction: column;
+  }
+  .profile-page {
+    padding: 18px 12px;
+  }
+}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { profileAPI } from '../api/client'
+import './Profile.css'
 
 export default function Profile() {
   const [skills, setSkills] = useState('')
@@ -32,26 +33,44 @@ export default function Profile() {
 
   return (
     <div className="profile-page">
-      <h1>My Profile</h1>
+      <div className="page-header">
+        <h1>My Profile</h1>
+        <p className="subtitle">Tell us about your background so we can match jobs better.</p>
+      </div>
+
       <form onSubmit={submit} className="profile-form">
-        <label>Skills (comma separated)</label>
-        <textarea value={skills} onChange={(e) => setSkills(e.target.value)} />
+        <div className="form-row">
+          <label className="field-label">Skills (comma separated)</label>
+          <textarea className="field-input" value={skills} onChange={(e) => setSkills(e.target.value)} />
+        </div>
 
-        <label>Degree</label>
-        <input value={degree} onChange={(e) => setDegree(e.target.value)} />
+        <div className="form-row two-col">
+          <div className="col">
+            <label className="field-label">Degree</label>
+            <input className="field-input" value={degree} onChange={(e) => setDegree(e.target.value)} />
+          </div>
+          <div className="col">
+            <label className="field-label">Years of experience</label>
+            <input className="field-input" type="number" value={years} onChange={(e) => setYears(e.target.value)} />
+          </div>
+        </div>
 
-        <label>Years of experience</label>
-        <input type="number" value={years} onChange={(e) => setYears(e.target.value)} />
+        <div className="form-row">
+          <label className="field-label">Interests</label>
+          <textarea className="field-input" value={interests} onChange={(e) => setInterests(e.target.value)} />
+        </div>
 
-        <label>Interests</label>
-        <textarea value={interests} onChange={(e) => setInterests(e.target.value)} />
+        <div className="form-row">
+          <label className="field-label">Upload resume (PDF or DOCX)</label>
+          <input className="field-input file-input" type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files[0])} />
+        </div>
 
-        <label>Upload resume (PDF or DOCX)</label>
-        <input type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files[0])} />
-
-        <button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Profile'}</button>
+        <div className="form-row actions">
+          <button className="btn primary" type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Profile'}</button>
+        </div>
       </form>
-      {message && <p className="muted-text">{message}</p>}
+
+      {message && <p className="muted-text message">{message}</p>}
     </div>
   )
 }

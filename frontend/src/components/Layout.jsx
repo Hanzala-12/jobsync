@@ -4,7 +4,10 @@ import './Layout.css'
 const navGroups = [
   {
     label: 'MAIN',
-    items: [{ path: '/', label: 'Dashboard' }],
+    items: [
+      { path: '/', label: 'Dashboard' },
+      { path: '/profile', label: 'Profile' },
+    ],
   },
   {
     label: 'JOBS',
