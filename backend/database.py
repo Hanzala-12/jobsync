@@ -81,3 +81,23 @@ def init_db():
                 "ats_score": "ALTER TABLE resume_versions ADD COLUMN ats_score INTEGER",
             },
         )
+        # Create prefetched_jobs table for background indexer/cache
+        connection.execute(
+            text(
+                """
+            CREATE TABLE IF NOT EXISTS prefetched_jobs (
+                job_id TEXT PRIMARY KEY,
+                title TEXT,
+                company TEXT,
+                description TEXT,
+                source TEXT,
+                fetched_at DATETIME
+            )
+            """
+            )
+        )
+        # Index for faster lookups by fetched_at
+        try:
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_prefetched_jobs_fetched_at ON prefetched_jobs (fetched_at)"))
+        except Exception:
+            pass

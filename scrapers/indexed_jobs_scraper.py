@@ -16,9 +16,12 @@ def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_u
     queries = [
         f'site:rozee.pk "{keyword}" "{city}"',
         f'site:mustakbil.com "{keyword}" "{city}"',
+        f'site:brightspyre.com "{keyword}" "{city}"',
+        f'site:paperpk.com "{keyword}" "{city}"',
         f'"{keyword}" "apply now" "{city}" site:.pk',
     ]
     jobs: List[Dict] = []
+    seen_urls = set()
     for search in queries:
         try:
             soup = soup_for(DUCK_URL.format(query=quote_plus(search)))
@@ -27,8 +30,9 @@ def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_u
         urls = []
         for anchor in soup.select("a[href]"):
             href = _extract_duck_url(anchor.get("href", ""))
-            if href.startswith("http") and href not in urls:
+            if href.startswith("http") and href not in urls and href not in seen_urls:
                 urls.append(href)
+                seen_urls.add(href)
             if len(urls) >= max_urls:
                 break
         for url in urls:

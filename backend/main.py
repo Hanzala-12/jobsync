@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.database import engine, Base
 from backend.routers import resume, jobs, applications, cover_letter, intelligence
 from backend.routers import kanban, voice_interview, browser_extension, followup, daily_scout
+import importlib
+profile = importlib.import_module('backend.routers.profile')
 from core.scheduler import start_scheduler_if_enabled
 from core.database import init_db
 
@@ -29,6 +31,7 @@ app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(cover_letter.router)
 app.include_router(intelligence.router)
+app.include_router(profile.router)
 
 # Include new upgrade routers
 app.include_router(kanban.router)

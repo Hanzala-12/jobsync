@@ -40,6 +40,21 @@ export const jobsAPI = {
   match: (jobId) => apiClient.get(`/jobs/${jobId}/match`),
   explainMatch: (payload) => apiClient.post('/jobs/explain-match', payload),
   salaryEstimate: (payload) => apiClient.post('/jobs/salary-estimate', payload),
+  autocomplete: (query) => apiClient.get('/jobs/autocomplete', { params: { query } }),
+}
+
+export const profileAPI = {
+  create: (formData) =>
+    apiClient.post('/profile', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  exists: () => apiClient.get('/profile'),
+}
+
+export const apiActions = {
+  match: (jobId) => apiClient.post(`/match/${jobId}`),
+  buildResume: (jobId) => apiClient.post(`/build_resume/${jobId}`),
+  coverLetter: (jobId) => apiClient.post(`/cover_letter/${jobId}`),
 }
 
 export const applicationsAPI = {

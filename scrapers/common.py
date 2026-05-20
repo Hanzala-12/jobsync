@@ -9,8 +9,12 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
-from fake_useragent import UserAgent
 from sqlalchemy.orm import Session
+
+try:
+    from fake_useragent import UserAgent
+except Exception:
+    UserAgent = None
 
 from config.pakistan_jobs_config import TECH_FILTER_KEYWORDS
 from core.deduplicator import process_incoming_job
@@ -20,10 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 def random_user_agent() -> str:
-    try:
-        return UserAgent().random
-    except Exception:
-        return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    if UserAgent is not None:
+        try:
+            return UserAgent().random
+        except Exception:
+            pass
+    return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 
 def request_html(url: str, timeout: int = 15) -> str:

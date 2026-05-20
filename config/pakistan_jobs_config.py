@@ -33,10 +33,11 @@ TECH_FILTER_KEYWORDS = [
 SOURCE_PRIORITY = {
     "rozee": 1,
     "mustakbil": 2,
+    "linkedin": 3,
     "careers_page": 3,
-    "linkedin": 4,
-    "brightspyre": 5,
-    "google_indexed": 6,
+    "brightspyre": 4,
+    "google_indexed": 5,
+    "bing_jobs": 6,
 }
 
 PAKISTANI_COMPANIES = [

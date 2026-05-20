@@ -1,8 +1,9 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
 import MatchPanel from '../components/MatchPanel'
-import { applicationsAPI, jobsAPI } from '../api/client'
+import { applicationsAPI, jobsAPI, profileAPI, apiActions } from '../api/client'
 import './Jobs.css'
 
 const LOCATION_OPTIONS = ['Pakistan', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'UAE', 'UK', 'Remote']
@@ -29,13 +30,21 @@ function Jobs() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [streamingCount, setStreamingCount] = useState(0)
+  const [streamElapsed, setStreamElapsed] = useState(0)
   const [page, setPage] = useState(2)
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelJob, setPanelJob] = useState(null)
   const [matchData, setMatchData] = useState(null)
+  const [matchModalOpen, setMatchModalOpen] = useState(false)
+  const [matchModalLoading, setMatchModalLoading] = useState(false)
+  const [matchModalResult, setMatchModalResult] = useState(null)
   const [toast, setToast] = useState('')
+    const [profileExists, setProfileExists] = useState(false)
   const [salaryCard, setSalaryCard] = useState(null)
   const [salaryData, setSalaryData] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   const localCount = useMemo(() => jobs.filter((job) => job.source === 'adzuna').length, [jobs])
   const remoteCount = useMemo(() => jobs.filter((job) => job.source !== 'adzuna').length, [jobs])
@@ -43,27 +52,80 @@ function Jobs() {
 
   const isCitySearch = PAK_CITIES.includes(location)
 
+  const handleQueryChange = async (value) => {
+    setQuery(value)
+    if (value.length > 0) {
+      try {
+        const response = await jobsAPI.autocomplete(value)
+        setSuggestions(response.data?.suggestions || [])
+        setShowSuggestions(true)
+      } catch {
+        setSuggestions([])
+      }
+    } else {
+      setSuggestions([])
+      setShowSuggestions(false)
+    }
+  }
+
+  const selectSuggestion = (suggestion) => {
+    setQuery(suggestion)
+    setSuggestions([])
+    setShowSuggestions(false)
+  }
+
   const search = async () => {
     setLoading(true)
     setError('')
     setJobs([])
     setSalaryCard(null)
     setSalaryData(null)
+    const selectedRemote = remoteOnly || location === 'Remote'
+    const API_BASE = import.meta.env.VITE_API_URL || '/api'
+    const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
+    const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}`
+
     try {
-      const selectedRemote = remoteOnly || location === 'Remote'
-      const response = await jobsAPI.search({
-        query,
-        location,
-        city: location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location,
-        remote_only: selectedRemote,
-        pakistan_only: pakistanOnly,
-        country_code: countryMap[location] || 'pk',
-      })
-      setJobs(response.data || [])
-    } catch {
+      const es = new EventSource(url)
+      const seen = new Set()
+      es.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data)
+          if (data.partial) {
+            // merge incoming partials into current list with dedupe
+            setJobs((prev) => {
+              const merged = [...prev]
+              for (const j of data.partial) {
+                const k = j.external_id || j.url || `${j.title}-${j.company}`
+                if (!seen.has(k)) {
+                  seen.add(k)
+                  merged.push(j)
+                }
+              }
+              return merged
+            })
+          }
+          if (typeof data.combined_count === 'number') {
+            setStreamingCount(data.combined_count)
+          }
+          if (typeof data.elapsed === 'number') {
+            setStreamElapsed(data.elapsed)
+          }
+          if (data.done) {
+            setLoading(false)
+            es.close()
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+      es.onerror = (err) => {
+        setLoading(false)
+        es.close()
+      }
+    } catch (e) {
       setError('Could not fetch jobs. Please try again.')
       setJobs([])
-    } finally {
       setLoading(false)
     }
   }
@@ -86,20 +148,30 @@ function Jobs() {
   }
 
   const openMatch = async (job) => {
-    setPanelOpen(true)
-    setPanelJob(job)
-    setMatchData(null)
-
-    const resumeText = localStorage.getItem('jobsync_resume_text') || ''
-    try {
-      const response = await jobsAPI.explainMatch({
-        job_description: job.description,
-        resume_text: resumeText,
-      })
-      setMatchData(response.data)
-    } catch {
-      setMatchData(null)
+    if (!profileExists) {
+      alert('Please complete your profile first')
+      return
     }
+
+    setMatchModalOpen(true)
+    setMatchModalLoading(true)
+    setMatchModalResult(null)
+    try {
+      const res = await jobsAPI.match(job.id)
+      setMatchModalResult(res.data)
+    } catch (e) {
+      setMatchModalResult({ match_percentage: 0, explanation: 'Failed to fetch match', missing_skills: [] })
+    } finally {
+      setMatchModalLoading(false)
+    }
+  }
+
+  const handleBuildResume = (job) => {
+    navigate('/resume', { state: { tab: 'rewrite', jobDescription: job.description } })
+  }
+
+  const handleCoverLetter = (job) => {
+    navigate('/cover-letter', { state: { job } })
   }
 
   const openSalary = async (job, index) => {
@@ -138,6 +210,19 @@ function Jobs() {
     return String(source || 'remote')
   }
 
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await profileAPI.exists()
+        if (mounted) setProfileExists(Boolean(res.data?.exists))
+      } catch (e) {
+        if (mounted) setProfileExists(false)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
   return (
     <div className="jobs-page">
       <div className="page-header">
@@ -147,11 +232,27 @@ function Jobs() {
 
       <div className="search-card">
         <div className="search-row">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search software engineer, data analyst, frontend..."
-          />
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              value={query}
+              onChange={(event) => handleQueryChange(event.target.value)}
+              onFocus={() => query.length > 0 && setShowSuggestions(true)}
+              placeholder="Search software engineer, data analyst, frontend..."
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="autocomplete-dropdown">
+                {suggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    className="autocomplete-item"
+                    onClick={() => selectSuggestion(suggestion)}
+                  >
+                    {suggestion}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <Button onClick={search} loading={loading}>Search</Button>
         </div>
 
@@ -199,8 +300,28 @@ function Jobs() {
       </div>
 
       {error && <p className="error-text">{error}</p>}
+      {!profileExists && (
+        <p className="warning-text">⚠️ Please complete your profile first — Match, Build Resume and Cover Letter are disabled.</p>
+      )}
       {toast && <p className="toast-text">{toast}</p>}
       <p className="muted-text">{resultText}</p>
+      {loading && (
+        <div>
+          <p className="muted-text">
+            <span className="spinner" aria-hidden="true" />
+            {' '}
+            Streaming results: {streamingCount} so far · {streamElapsed}s elapsed
+          </p>
+          <div className="progress-wrap" aria-hidden>
+            {/* If we have a combined_count we show a heuristic determinate width, otherwise indeterminate */}
+            {streamingCount > 0 ? (
+              <div className="progress-bar" style={{ width: Math.min(100, streamingCount * 6) + '%' }} />
+            ) : (
+              <div className="progress-bar progress-indeterminate" style={{ width: '40%' }} />
+            )}
+          </div>
+        </div>
+      )}
 
       {remoteCount > 0 && !remoteOnly && location !== 'Remote' && (
         <p className="notice-text">Showing {localCount} local jobs and {remoteCount} remote jobs for {location}</p>
@@ -223,7 +344,9 @@ function Jobs() {
             <div className="divider" />
             <div className="job-actions">
               <a href={job.url} target="_blank" rel="noreferrer">View Job {'->'}</a>
-              <button type="button" onClick={() => openMatch(job)}>Match Me</button>
+              <button type="button" onClick={() => openMatch(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Match Me</button>
+              <button type="button" onClick={() => handleBuildResume(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Build Resume</button>
+              <button type="button" onClick={() => handleCoverLetter(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Cover Letter</button>
               <button type="button" className="salary-link" onClick={() => openSalary(job, index)}>Est. Salary</button>
               <Button size="small" variant="secondary" onClick={() => saveToTracker(job)}>Save</Button>
             </div>
@@ -241,7 +364,6 @@ function Jobs() {
       </div>
 
       <div className="pagination">{'<- Previous  Page '}{page}{' of 8  Next ->'}</div>
-
       <MatchPanel
         open={panelOpen}
         job={panelJob}
@@ -252,6 +374,46 @@ function Jobs() {
           navigate('/resume', { state: { tab: 'rewrite', jobDescription } })
         }}
       />
+
+      {matchModalOpen && (
+        <div className="match-modal-overlay" onClick={() => setMatchModalOpen(false)}>
+          <div className="match-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            {matchModalLoading ? (
+              <div className="match-loading-container">
+                <div className="spinner" style={{ width: 40, height: 40, borderWidth: 4 }} />
+                <p>Analyzing job fit with AI...</p>
+              </div>
+            ) : (
+              <div className="match-modal-body">
+                <h3>Match Score: {matchModalResult ? Math.round(matchModalResult.match_percentage) : 0}%</h3>
+                <div className="match-progress">
+                  <div className="match-progress-bar" style={{ width: `${Math.min(100, matchModalResult ? matchModalResult.match_percentage : 0)}%` }} />
+                </div>
+                
+                <h4>Missing Skills</h4>
+                <div className="missing-skills-container">
+                  {(matchModalResult && matchModalResult.missing_skills && matchModalResult.missing_skills.length > 0) ? (
+                    matchModalResult.missing_skills.map((s, i) => (
+                      <span key={i} className="missing-skill-chip">{s}</span>
+                    ))
+                  ) : (
+                    <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
+                  )}
+                </div>
+                
+                <h4>Analysis Explanation</h4>
+                <p className="match-explanation">
+                  {matchModalResult ? matchModalResult.explanation : 'No explanation available.'}
+                </p>
+                
+                <div className="match-modal-actions">
+                  <button className="match-modal-close-btn" onClick={() => setMatchModalOpen(false)}>Close</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

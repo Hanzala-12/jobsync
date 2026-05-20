@@ -8,6 +8,15 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 import requests
+import time
+import concurrent.futures
+import logging
+
+# simple in-memory cache for recent search results
+_search_cache: Dict[str, tuple] = {}
+_logger = logging.getLogger(__name__)
+_SEARCH_CACHE_TTL = 30
+_SOURCE_TIMEOUT_SECONDS = 4
 
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/{country}/search/1"
 REMOTIVE_URL = "https://remotive.com/api/remote-jobs"
@@ -35,6 +44,50 @@ QUERY_CORRECTIONS = {
     "machin learning": "machine learning",
 }
 
+# Explicit source registry so UI/API can explain why a source is not used.
+PAKISTAN_SOURCE_STATUS: List[Dict[str, object]] = [
+    {
+        "key": "rozee",
+        "active": True,
+        "reason": "Primary Pakistan source with stable structured responses.",
+    },
+    {
+        "key": "mustakbil",
+        "active": True,
+        "reason": "High-volume Pakistan listings with broad category coverage.",
+    },
+    {
+        "key": "brightspyre",
+        "active": True,
+        "reason": "Pakistan tech board with targeted local openings.",
+    },
+    {
+        "key": "bing_jobs",
+        "active": True,
+        "reason": "Search-index fallback that discovers jobs across multiple local sites.",
+    },
+    {
+        "key": "google_indexed",
+        "active": True,
+        "reason": "DuckDuckGo-indexed discovery for broader local coverage.",
+    },
+    {
+        "key": "linkedin",
+        "active": True,
+        "reason": "Indexed LinkedIn public job pages used as a supplemental source.",
+    },
+    {
+        "key": "careers_page",
+        "active": True,
+        "reason": "Direct company careers pages for fresher first-party listings.",
+    },
+    {
+        "key": "indeed",
+        "active": False,
+        "reason": "Intentionally disabled: aggressive anti-bot protections, frequent 403/rate limits, and high IP-block risk.",
+    },
+]
+
 
 def clean_text(value: Optional[str]) -> str:
     if not value:
@@ -42,6 +95,10 @@ def clean_text(value: Optional[str]) -> str:
     text = HTML_TAG_RE.sub(" ", str(value))
     text = html.unescape(text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def get_pakistan_source_status() -> List[Dict[str, object]]:
+    return list(PAKISTAN_SOURCE_STATUS)
 
 
 def _resolve_country_and_where(location: str, city: Optional[str], country_code: str) -> Tuple[Optional[str], str]:
@@ -144,7 +201,7 @@ def fetch_adzuna(query: str, country_code: str = "pk", where: str = "", results_
             "where": where,
             "results_per_page": results_per_page,
         },
-        timeout=20,
+        timeout=4,
     )
     response.raise_for_status()
 
@@ -155,7 +212,7 @@ def fetch_remotive(query: str, limit: int = 20) -> List[Dict]:
     response = requests.get(
         REMOTIVE_URL,
         params={"search": query, "limit": limit},
-        timeout=20,
+        timeout=4,
     )
     response.raise_for_status()
     return [_normalize_job(item, "remotive") for item in (response.json().get("jobs") or [])]
@@ -165,7 +222,7 @@ def fetch_jobicy(query: str, count: int = 20) -> List[Dict]:
     response = requests.get(
         JOBICY_URL,
         params={"tag": query, "count": count},
-        timeout=20,
+        timeout=4,
     )
     response.raise_for_status()
 
@@ -331,6 +388,126 @@ def fetch_rozee_pakistan(query: str, city: Optional[str] = None, max_pages: int 
     return _filter_city([job for job in jobs if _matches_remote_title(job, query)], city)
 
 
+def fetch_mustakbil_pakistan(query: str, city: Optional[str] = None, max_pages: int = 1) -> List[Dict]:
+    try:
+        from scrapers.mustakbil_scraper import scrape_query
+    except Exception:
+        return []
+
+    raw_jobs = []
+    target_city = city.lower() if city else "lahore"
+    
+    # Mustakbil returns raw jobs; fetch from broad queries to get diverse job types.
+    for variant in _query_variants(query):
+        try:
+            raw_jobs.extend(scrape_query(keyword=variant, city=target_city, max_pages=max_pages))
+        except Exception:
+            continue
+
+    jobs = []
+    for raw in raw_jobs:
+        item = dict(raw)
+        item["source"] = "mustakbil"
+        item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
+        jobs.append(_normalize_job(item, "mustakbil"))
+    
+    # Don't over-filter Mustakbil: return all jobs for versatility.
+    # (Other sources already apply query matching; Mustakbil shows raw catalog.)
+    return _filter_city(jobs, city)
+
+
+def fetch_bing_pakistan(query: str, city: Optional[str] = None, max_pages: int = 1) -> List[Dict]:
+    """Fetch jobs from Bing search results for Pakistan job sites"""
+    try:
+        from scrapers.bing_scraper import scrape_query
+    except Exception:
+        return []
+
+    raw_jobs = []
+    for variant in _query_variants(query):
+        try:
+            raw_jobs.extend(scrape_query(keyword=variant, city=city.lower() if city else "lahore", max_pages=max_pages))
+        except Exception:
+            continue
+
+    jobs = []
+    for raw in raw_jobs:
+        item = dict(raw)
+        item["source"] = "bing_jobs"
+        item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
+        jobs.append(_normalize_job(item, "bing_jobs"))
+    return _filter_city([job for job in jobs if _matches_remote_title(job, query)], city)
+
+
+def fetch_brightspyre(query: str, max_pages: int = 1) -> List[Dict]:
+    """Fetch jobs from BrightSpyre job board"""
+    try:
+        from scrapers.brightspyre_scraper import scrape_query
+    except Exception:
+        return []
+
+    raw_jobs = []
+    for variant in _query_variants(query):
+        try:
+            raw_jobs.extend(scrape_query(keyword=variant, max_pages=max_pages))
+        except Exception:
+            continue
+
+    jobs = []
+    for raw in raw_jobs:
+        item = dict(raw)
+        item["source"] = "brightspyre"
+        item["location"] = item.get("location") or item.get("city") or "Pakistan"
+        jobs.append(_normalize_job(item, "brightspyre"))
+    return [job for job in jobs if _matches_remote_title(job, query)]
+
+
+def fetch_linkedin_indexed(query: str, city: Optional[str] = None, max_jobs: int = 4) -> List[Dict]:
+    try:
+        from scrapers.linkedin_indexed_scraper import scrape_query
+    except Exception:
+        return []
+
+    raw_jobs = []
+    target_city = city.lower() if city else "lahore"
+    for variant in _query_variants(query):
+        try:
+            raw_jobs.extend(scrape_query(keyword=variant, city=target_city, max_jobs=max_jobs))
+        except Exception:
+            continue
+
+    jobs = []
+    for raw in raw_jobs:
+        item = dict(raw)
+        item["source"] = "linkedin"
+        item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
+        jobs.append(_normalize_job(item, "linkedin"))
+    return _filter_city([job for job in jobs if _matches_remote_title(job, query)], city)
+
+
+def fetch_company_careers(query: str, company_limit: int = 6) -> List[Dict]:
+    try:
+        from config.pakistan_jobs_config import PAKISTANI_COMPANIES
+        from scrapers.careers_page_scraper import scrape_company
+    except Exception:
+        return []
+
+    raw_jobs = []
+    for company in PAKISTANI_COMPANIES[:company_limit]:
+        try:
+            raw_jobs.extend(scrape_company(company))
+        except Exception:
+            continue
+
+    jobs = []
+    for raw in raw_jobs:
+        item = dict(raw)
+        item["source"] = "careers_page"
+        item["location"] = item.get("location") or item.get("city") or "Pakistan"
+        jobs.append(_normalize_job(item, "careers_page"))
+    return [job for job in jobs if _matches_remote_title(job, query)]
+
+
 def _mark_remote(jobs: List[Dict]) -> List[Dict]:
     marked = []
     for job in jobs:
@@ -371,6 +548,25 @@ def search_jobs(
     query = _normalize_query(query)
     location_key = (location or "").strip().lower()
     is_remote_mode = remote_only or location_key == "remote"
+    cache_key = query
+
+    # Simple in-memory cache to speed up repeated queries during active UI use
+    try:
+        if cache_key in _search_cache:
+            ts, cached = _search_cache[cache_key]
+            if time.time() - ts < _SEARCH_CACHE_TTL:
+                return cached
+    except Exception:
+        pass
+
+    def _collect_future(future: concurrent.futures.Future, source_name: str) -> List[Dict]:
+        try:
+            return future.result(timeout=_SOURCE_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, source_name)
+        except Exception as exc:
+            _logger.warning("search source failed: %s (%s)", source_name, exc)
+        return []
 
     # Remote-only mode: skip Adzuna entirely
     if is_remote_mode:
@@ -402,22 +598,86 @@ def search_jobs(
         except Exception:
             adzuna_city_jobs = []
 
-        if len(adzuna_city_jobs) < 5:
-            try:
-                adzuna_broad_jobs = fetch_adzuna(query=query, country_code="pk", where="", results_per_page=20)
-            except Exception:
-                adzuna_broad_jobs = []
+        try:
+            adzuna_broad_jobs = fetch_adzuna(query=query, country_code="pk", where="", results_per_page=20)
+        except Exception:
+            adzuna_broad_jobs = []
 
-        indexed_jobs: List[Dict] = []
+        # Fetch from all sources simultaneously for max results
+        rozee_jobs = []
+        indexed_jobs = []
+        mustakbil_jobs = []
+        bing_jobs = []
+        linkedin_jobs = []
+        careers_jobs = []
+        
+        # Run slower external fetches in parallel with a short per-call timeout
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=6)
+        try:
+            futures = {
+                executor.submit(fetch_rozee_pakistan, query, resolved_where or location, 1): "rozee",
+                # indexed fallback is expensive; run only if we need more results later
+                # executor.submit(fetch_indexed_pakistan, query, resolved_where or location, 6): "indexed",
+                executor.submit(fetch_mustakbil_pakistan, query, resolved_where or location, 1): "mustakbil",
+                executor.submit(fetch_bing_pakistan, query, resolved_where or location, 1): "bing",
+                executor.submit(fetch_linkedin_indexed, query, resolved_where or location, 4): "linkedin",
+                executor.submit(fetch_company_careers, query, 6): "careers",
+            }
+
+            done, pending = concurrent.futures.wait(
+                set(futures.keys()),
+                timeout=_SOURCE_TIMEOUT_SECONDS,
+                return_when=concurrent.futures.ALL_COMPLETED,
+            )
+
+            for fut in done:
+                name = futures.get(fut, "unknown")
+                try:
+                    res = fut.result(timeout=0)
+                except Exception as exc:
+                    _logger.warning("search source failed: %s (%s)", name, exc)
+                    res = []
+                if name == "rozee":
+                    rozee_jobs = res
+                elif name == "mustakbil":
+                    mustakbil_jobs = res
+                elif name == "bing":
+                    bing_jobs = res
+                elif name == "linkedin":
+                    linkedin_jobs = res
+                elif name == "careers":
+                    careers_jobs = res
+
+            for fut in pending:
+                _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, futures.get(fut, "unknown"))
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        brightspyre_jobs = []
+        try:
+            brightspyre_jobs = fetch_brightspyre(query=query, max_pages=1)
+        except Exception:
+            pass
+
         combined_adzuna = dedupe_jobs(adzuna_city_jobs + adzuna_broad_jobs)
-        if len(combined_adzuna) < 5:
-            rozee_jobs = fetch_rozee_pakistan(query=query, city=resolved_where or location, max_pages=1)
-            indexed_jobs = fetch_indexed_pakistan(query=query, city=resolved_where or location, max_urls=4)
-            indexed_jobs = rozee_jobs + indexed_jobs
+        # Try indexed fallback only if combined sources are low
+        indexed_jobs = []
+        all_sources = rozee_jobs + mustakbil_jobs + indexed_jobs + bing_jobs + linkedin_jobs + careers_jobs + brightspyre_jobs
+        combined_adzuna = dedupe_jobs(combined_adzuna + all_sources)
 
-        combined_adzuna = dedupe_jobs(combined_adzuna + indexed_jobs)
-
-        return dedupe_jobs(_clean_jobs(combined_adzuna))
+        result = dedupe_jobs(_clean_jobs(combined_adzuna))
+        if len(result) < 5:
+            try:
+                indexed_jobs = fetch_indexed_pakistan(query=query, city=resolved_where or location, max_urls=6)
+                combined_adzuna = dedupe_jobs(combined_adzuna + indexed_jobs)
+                result = dedupe_jobs(_clean_jobs(combined_adzuna))
+            except Exception:
+                pass
+        try:
+            _search_cache[cache_key] = (time.time(), result)
+        except Exception:
+            pass
+        return result
 
     # Pakistan (no city) or non-city location mode
     adzuna_jobs: List[Dict] = []
@@ -428,8 +688,73 @@ def search_jobs(
 
     combined = list(adzuna_jobs)
 
-    if country.lower() == "pk" and len(combined) < 5:
-        combined.extend(fetch_rozee_pakistan(query=query, city=None, max_pages=1))
+    # Get jobs from all Pakistan sources simultaneously
+    rozee_jobs = []
+    mustakbil_jobs = []
+    bing_jobs = []
+    brightspyre_jobs = []
+    linkedin_jobs = []
+    careers_jobs = []
+    
+    if country.lower() == "pk":
+        # Parallelize Pakistan-wide source fetches to reduce latency
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=6)
+        try:
+            futures = {
+                executor.submit(fetch_rozee_pakistan, query, None, 1): "rozee",
+                executor.submit(fetch_bing_pakistan, query, None, 1): "bing",
+                executor.submit(fetch_mustakbil_pakistan, query, None, 1): "mustakbil",
+                executor.submit(fetch_brightspyre, query, 1): "brightspyre",
+                executor.submit(fetch_linkedin_indexed, query, resolved_where or city, 4): "linkedin",
+                executor.submit(fetch_company_careers, query, 6): "careers",
+            }
+
+            done, pending = concurrent.futures.wait(
+                set(futures.keys()),
+                timeout=_SOURCE_TIMEOUT_SECONDS,
+                return_when=concurrent.futures.ALL_COMPLETED,
+            )
+
+            for fut in done:
+                name = futures.get(fut, "unknown")
+                try:
+                    res = fut.result(timeout=0)
+                except Exception as exc:
+                    _logger.warning("search source failed: %s (%s)", name, exc)
+                    res = []
+                if name == "rozee":
+                    rozee_jobs = res
+                elif name == "bing":
+                    bing_jobs = res
+                elif name == "mustakbil":
+                    mustakbil_jobs = res
+                elif name == "brightspyre":
+                    brightspyre_jobs = res
+                elif name == "linkedin":
+                    linkedin_jobs = res
+                elif name == "careers":
+                    careers_jobs = res
+
+            for fut in pending:
+                _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, futures.get(fut, "unknown"))
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        combined.extend(rozee_jobs)
+        combined.extend(mustakbil_jobs)
+        combined.extend(bing_jobs)
+        combined.extend(brightspyre_jobs)
+        combined.extend(linkedin_jobs)
+        combined.extend(careers_jobs)
+
+        # cache the combined result briefly
+        try:
+            result = dedupe_jobs(_clean_jobs(combined))
+            _search_cache[cache_key] = (time.time(), result)
+        except Exception:
+            result = dedupe_jobs(_clean_jobs(combined))
+
+        return result
 
     if pakistan_only:
         return dedupe_jobs(_clean_jobs(combined))

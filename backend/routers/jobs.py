@@ -1,7 +1,16 @@
-﻿import json
+import json
 from typing import List, Optional
+import re
 
 from fastapi import APIRouter, Depends
+from starlette.responses import StreamingResponse
+import json
+import threading
+import concurrent.futures
+import time as _time
+import logging
+import os
+from backend import services as _services
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -18,9 +27,11 @@ from backend.services.job_apis import clean_text, get_pakistan_source_status, se
 from core.deduplicator import process_incoming_job
 from core.llm_provider import LLMProvider
 from core.normalizer import normalize_job
-from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
+# lazy import RAG functions inside _upsert_jobs to avoid heavy startup imports
+from backend.database import engine
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+_logger = logging.getLogger(__name__)
 
 
 def _extract_json(response: str, fallback):
@@ -59,6 +70,10 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
     profile = db.query(UserProfile).first()
     resume_summary = profile.resume_text[:1500] if profile and profile.resume_text else ""
 
+    cover_enabled = os.getenv("ENABLE_JOB_ARTIFACTS", "false").lower() in {"1", "true", "yes"}
+    if cover_enabled:
+        _logger.warning("Cover letter generation enabled – search may be slower.")
+
     for job in jobs:
         raw_job = {
             "title": clean_text(str(job.get("title") or "")),
@@ -76,31 +91,54 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
         saved_job, _ = process_incoming_job(db, normalized)
         saved_jobs.append(saved_job)
 
-        if resume_summary and saved_job and getattr(saved_job, "id", None):
+        if resume_summary and saved_job and getattr(saved_job, "id", None) and cover_enabled:
+            # Run cover letter generation asynchronously to avoid blocking search response.
+            def _bg_generate(job_id, resume_text, company, role, job_description, source, job_url):
+                try:
+                    from backend.database import SessionLocal
+                    from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
+
+                    db_session = SessionLocal()
+                    try:
+                        draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
+                            job_description,
+                            resume_text,
+                            company_name=company,
+                            role=role,
+                            tone="professional",
+                            top_k=5,
+                            metadata_filter={"company": company} if company else None,
+                        )
+                        save_cover_letter_artifacts(
+                            job_id,
+                            draft,
+                            source_ids,
+                            retrieved_chunks,
+                            metadata={
+                                "company": company,
+                                "role": role,
+                                "source": source,
+                                "job_url": job_url,
+                            },
+                        )
+                    finally:
+                        try:
+                            db_session.close()
+                        except Exception:
+                            pass
+                except Exception as exc:
+                    _logger.exception("Background cover letter generation failed: %s", exc)
+
             try:
-                draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
-                    saved_job.description or raw_job["description"],
-                    resume_summary,
-                    company_name=saved_job.company or raw_job["company"],
-                    role=saved_job.title or raw_job["title"],
-                    tone="professional",
-                    top_k=5,
-                    metadata_filter={"company": saved_job.company} if saved_job.company else None,
+                t = threading.Thread(
+                    target=_bg_generate,
+                    args=(saved_job.id, resume_summary, saved_job.company or raw_job["company"], saved_job.title or raw_job["title"], saved_job.description or raw_job["description"], saved_job.source, saved_job.url),
                 )
-                save_cover_letter_artifacts(
-                    saved_job.id,
-                    draft,
-                    source_ids,
-                    retrieved_chunks,
-                    metadata={
-                        "company": saved_job.company,
-                        "role": saved_job.title,
-                        "source": saved_job.source,
-                        "job_url": saved_job.url,
-                    },
-                )
+                t.daemon = True
+                t.start()
             except Exception:
-                pass
+                _logger.exception("Failed to start cover letter background thread")
+                _logger.warning("Cover letter generation enabled but background threading unavailable; generation may block search responses.")
 
     return saved_jobs
 
@@ -115,6 +153,39 @@ def search_jobs_endpoint(
     country_code: str = "pk",
     db: Session = Depends(get_db),
 ):
+    # First check prefetched jobs cache for fast responses
+    try:
+        words = [w for w in re.findall(r"[a-z0-9+#.]+", (query or "").lower()) if len(w) > 2]
+        if words:
+            where_clauses = []
+            params = []
+            for w in words:
+                clause = "(lower(title) LIKE ? OR lower(description) LIKE ?)"
+                where_clauses.append(clause)
+                like = f"%{w}%"
+                params.extend([like, like])
+            sql = "SELECT job_id, title, company, description, source FROM prefetched_jobs WHERE " + " AND ".join(where_clauses) + " ORDER BY fetched_at DESC LIMIT 50"
+            with engine.connect() as conn:
+                rows = conn.execute(sql, params).fetchall()
+                if rows and len(rows) >= 5:
+                    jobs = []
+                    for r in rows:
+                        jobs.append({
+                            "external_id": r[0],
+                            "title": r[1],
+                            "company": r[2],
+                            "description": r[3],
+                            "source": r[4],
+                            "url": r[0] if (r[0] and r[0].startswith("http")) else "",
+                        })
+                    for job in jobs:
+                        job["description"] = clean_text(job.get("description", ""))
+                    return _upsert_jobs(db, jobs)
+    except Exception:
+        # on any error, fall back to live search
+        pass
+
+    # Not enough prefetched results; perform live search and update cache asynchronously
     jobs = search_jobs(
         query=query,
         location=location,
@@ -127,7 +198,113 @@ def search_jobs_endpoint(
     for job in jobs:
         job["description"] = clean_text(job.get("description", ""))
 
+    # Update cache in background (fire-and-forget)
+    try:
+        def _bg_update_cache(jobs_list):
+            try:
+                from backend.job_indexer import _upsert_prefetched
+                for j in jobs_list:
+                    try:
+                        _upsert_prefetched(j)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_bg_update_cache, args=(jobs,))
+        t.daemon = True
+        t.start()
+    except Exception:
+        pass
+
     return _upsert_jobs(db, jobs)
+
+
+@router.get('/search/stream')
+def search_jobs_stream(
+    query: str = 'software engineer',
+    location: str = 'Pakistan',
+    city: Optional[str] = None,
+    remote_only: bool = False,
+    pakistan_only: bool = False,
+    country_code: str = 'pk',
+):
+    """Stream job search results as server-sent events (SSE) for progressive rendering."""
+
+    def event_stream():
+        start_ts = _time.time()
+        combined = []
+        seen_keys = set()
+
+        # build list of source callables depending on location
+        src_calls = []
+        # fast sources
+        src_calls.append(lambda: _services.job_apis.fetch_rozee_pakistan(query, city or location, max_pages=1))
+        src_calls.append(lambda: _services.job_apis.fetch_mustakbil_pakistan(query, city or location, max_pages=1))
+        src_calls.append(lambda: _services.job_apis.fetch_bing_pakistan(query, city or location, max_pages=1))
+        src_calls.append(lambda: _services.job_apis.fetch_brightspyre(query, max_pages=1))
+        src_calls.append(lambda: _services.job_apis.fetch_linkedin_indexed(query, city or location, max_jobs=4))
+        src_calls.append(lambda: _services.job_apis.fetch_company_careers(query, company_limit=6))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(src_calls)) as executor:
+            future_to_name = {executor.submit(call): f"source_{index}" for index, call in enumerate(src_calls)}
+            pending = set(future_to_name)
+
+            while pending:
+                done, pending = concurrent.futures.wait(
+                    pending,
+                    timeout=0.5,
+                    return_when=concurrent.futures.FIRST_COMPLETED,
+                )
+                if not done:
+                    continue
+
+                for fut in done:
+                    name = future_to_name.get(fut, "unknown")
+                    try:
+                        res = fut.result(timeout=0)
+                    except Exception as exc:
+                        _logger.warning("stream source failed: %s (%s)", name, exc)
+                        res = []
+
+                    new = []
+                    for job in res:
+                        key = job.get('external_id') or f"{job.get('title')}::{job.get('company')}::{job.get('url')}"
+                        if key in seen_keys:
+                            continue
+                        seen_keys.add(key)
+                        new.append(job)
+                        combined.append(job)
+
+                    payload = {
+                        'partial': new,
+                        'combined_count': len(combined),
+                        'elapsed': round(_time.time() - start_ts, 2),
+                    }
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+            if len(combined) < 5:
+                try:
+                    indexed = _services.job_apis.fetch_indexed_pakistan(query, city or location, max_urls=6)
+                    new = []
+                    for job in indexed:
+                        key = job.get('external_id') or f"{job.get('title')}::{job.get('company')}::{job.get('url')}"
+                        if key in seen_keys:
+                            continue
+                        seen_keys.add(key)
+                        new.append(job)
+                        combined.append(job)
+                    if new:
+                        payload = {'partial': new, 'combined_count': len(combined), 'elapsed': round(_time.time() - start_ts, 2)}
+                        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                except Exception as exc:
+                    _logger.warning("indexed fallback failed: %s", exc)
+
+        # Final event with done flag and all combined results
+        final = {'done': True, 'results': combined, 'elapsed': round(_time.time() - start_ts, 2)}
+        yield f"data: {json.dumps(final, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type='text/event-stream')
 
 
 @router.get("/sources")

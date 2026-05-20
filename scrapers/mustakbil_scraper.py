@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Dict, List
-from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
@@ -15,39 +14,71 @@ BASE_URL = "https://www.mustakbil.com"
 
 
 def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_pages: int = 5) -> List[Dict]:
+    """Scrape Mustakbil listings. Returns ALL job types regardless of keyword query."""
+    normalized_city = (city or "lahore").strip().lower()
+
+    listing_urls = [
+        f"{BASE_URL}/jobs/pakistan/{normalized_city}/information-technology",
+        f"{BASE_URL}/jobs/pakistan/{normalized_city}",
+    ]
+
+    # Wider fallback for non-city searches or sparse city pages.
+    if normalized_city in {"", "pakistan", "remote"}:
+        listing_urls.extend(
+            [
+                f"{BASE_URL}/jobs/pakistan/information-technology",
+                f"{BASE_URL}/jobs/pakistan",
+            ]
+        )
+
     jobs: List[Dict] = []
-    for page in range(1, max_pages + 1):
-        url = f"{BASE_URL}/jobs/search/?q={quote_plus(keyword)}&city={quote_plus(city)}&page={page}"
+    seen_urls = set()
+
+    for url in listing_urls:
         try:
             soup = soup_for(url)
         except Exception:
+            continue
+
+        # Mustakbil listing pages expose job links directly using /jobs/job/<id>
+        links = soup.select("a[href*='/jobs/job/']")
+        for anchor in links:
+            href = anchor.get("href") or ""
+            apply_url = absolutize(BASE_URL, href)
+            if not apply_url or apply_url in seen_urls:
+                continue
+
+            title = visible_text(anchor)
+            if not title or title.lower().startswith("view"):
+                continue
+
+            detail = _fetch_detail(apply_url)
+            
+            # Include all jobs from Mustakbil - don't filter by keyword.
+            # User can search/filter later; we return raw data.
+            seen_urls.add(apply_url)
+            jobs.append(
+                {
+                    "title": title,
+                    "company": detail.get("company", ""),
+                    "city": normalized_city,
+                    "salary": detail.get("salary", ""),
+                    "job_type": "",
+                    "experience": "",
+                    "posted_date": detail.get("posted_date"),
+                    "apply_url": apply_url,
+                    "description": detail.get("description", ""),
+                    "possibly_inactive": _last_date_passed(detail.get("description", "")),
+                }
+            )
+
+            # Keep a reasonable cap per listing page to avoid slow full crawls.
+            if len(jobs) >= 25:
+                break
+
+        if jobs:
             break
 
-        cards = soup.select(".job-listing, .job, article, .search-result, .job-row")
-        if not cards:
-            cards = soup.select("a[href*='/jobs/job/'], a[href*='/jobs/']")
-
-        for card in cards[:20]:
-            anchor = card if card.name == "a" else card.select_one("a[href]")
-            href = anchor.get("href") if anchor else ""
-            title = visible_text(anchor) or visible_text(card.select_one("h2, h3, .title"))
-            if not title:
-                continue
-            apply_url = absolutize(BASE_URL, href)
-            detail = _fetch_detail(apply_url)
-            raw = {
-                "title": title,
-                "company": visible_text(card.select_one(".company, .company-name")) or detail.get("company", ""),
-                "city": city,
-                "salary": visible_text(card.select_one(".salary")) or detail.get("salary", ""),
-                "job_type": visible_text(card.select_one(".job-type")),
-                "experience": visible_text(card.select_one(".experience")),
-                "posted_date": visible_text(card.select_one(".date, .posted")) or detail.get("posted_date"),
-                "apply_url": apply_url,
-                "description": detail.get("description", visible_text(card)),
-                "possibly_inactive": _last_date_passed(detail.get("description", "")),
-            }
-            jobs.append(raw)
     return jobs
 
 

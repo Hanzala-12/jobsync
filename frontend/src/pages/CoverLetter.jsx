@@ -1,4 +1,5 @@
-﻿import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Button from '../components/Button'
 import { coverLetterAPI } from '../api/client'
 import './CoverLetter.css'
@@ -6,12 +7,21 @@ import './CoverLetter.css'
 const tones = ['Professional', 'Enthusiastic', 'Concise']
 
 function CoverLetter() {
+  const location = useLocation()
   const [jobTitle, setJobTitle] = useState('')
   const [company, setCompany] = useState('')
   const [jobDescription, setJobDescription] = useState('')
   const [tone, setTone] = useState('Professional')
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.job) {
+      setJobTitle(location.state.job.title || '')
+      setCompany(location.state.job.company || '')
+      setJobDescription(location.state.job.description || '')
+    }
+  }, [location.state])
 
   const wordCount = useMemo(() => draft.trim().split(/\s+/).filter(Boolean).length, [draft])
   const readingTime = Math.max(1, Math.ceil(wordCount / 200))

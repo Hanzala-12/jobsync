@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Resume from './pages/Resume'
 import Jobs from './pages/Jobs'
+import Profile from './pages/Profile'
 import Applications from './pages/Applications'
 import CoverLetter from './pages/CoverLetter'
 import Interview from './pages/Interview'
@@ -18,6 +19,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/resume" element={<Resume />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/applications" element={<Applications />} />
           <Route path="/kanban" element={<Kanban />} />

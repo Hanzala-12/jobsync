@@ -1,121 +1,120 @@
-# JobSync / CareerPrep
+# 🚀 JobSync Pro
 
-An AI-assisted job search workspace with a Python CLI, FastAPI backend, and React dashboard. It combines file-based assignment workflows with live job scouting, resume analysis, application tracking, and generated outreach content.
+JobSync Pro is a production-ready, showcase-quality AI-assisted job search and application management ecosystem. It integrates a **FastAPI backend**, a **React dashboard**, a **Chrome Browser Extension**, a **CLI tool**, and an **automated background indexing loop**. It provides job seekers with automated scouting, AI-driven match analysis, cold outreach templates, voice-activated mock interviews, and PDF resume tailoring.
 
-## What It Does
+---
 
-- Reads job posters, resumes, and knowledge base files from local folders
-- Analyzes jobs and resumes with LLM-backed and rule-based fallbacks
-- Scores match quality, highlights missing skills, and suggests improvements
-- Generates cover letters, LinkedIn messages, and interview prep questions
-- Tracks applications, reminders, follow-ups, and Kanban status
-- Scans live job feeds and saves strong matches into the tracker
+## ✨ Features & Capabilities
 
-## Highlights
+### 🔍 1. Automated Job Scouting & Prefetch Indexing (NEW)
+- **Background Prefetch Indexer (`backend/job_indexer.py`)**: Runs continuously as a background process or scheduled task. It pre-fetches popular job queries (such as Software Engineer, Data Analyst, Data Scientist, Product Manager, DevOps, and Designer) hourly and stores them in a local SQLite cache.
+- **Sub-Second Job Search**: The `/jobs/search` endpoint utilizes token-based query matching (with `AND` logic) to find prefetched jobs instantaneously. On cache misses, it transparently falls back to a multi-source live API query (Adzuna, Remotive, Jobicy) and updates the local cache asynchronously.
+- **Location-First Filters**: Toggle between local (e.g., Pakistan cities: Karachi, Lahore, Islamabad) and global remote postings.
 
-- PDF and text support for jobs, resumes, and KB files
-- FastAPI backend with SQLite persistence
-- React dashboard with analytics, Kanban, resume analysis, and daily scout views
-- Daily job scout with live progress polling and actionable job cards
-- Cover letter generator with tone selection and export actions
-- Application tracker with follow-up metadata and urgency flags
+### 🤖 2. In-Page AI Match Analysis (NEW)
+- **Glassmorphic Match Me Modal**: A beautiful, interactive in-page modal dialog that calculates job-to-resume ATS compatibility.
+- **Score Progress Indicators**: Visually charts compatibility percentage using styled CSS progress bars.
+- **Key Skill Gap Visualizer**: Pinpoints missing keywords and technical terms, displaying them as responsive tag chips (rose/green badge layout).
+- **Outreach & Preparation Routing**: Flow parameters directly from the modal into the Resume Rewriter or Cover Letter Generator without losing search context.
 
-## Project Layout
+### 📄 3. Document Tailoring & Outreach
+- **Asynchronous Cover Letter Generation**: Generates customized cover letters using user-profile embeddings and a RAG (Retrieval-Augmented Generation) loop. Runs asynchronously in a background thread to prevent search latency, gated behind the `ENABLE_JOB_ARTIFACTS` configuration flag.
+- **Resume Re-writer & ATS Scanner**: Upload your resume PDF, paste the job description, and automatically get an ATS matching score, missing keywords, and structural tips.
+- **Outreach Generator**: Creates personalized cold outreach emails and LinkedIn messages using local company/role contexts.
+
+### 📋 4. Kanban Tracking & Stale Reminders
+- **Visual Application Pipeline**: Drag-and-drop your applications through *Saved*, *Applied*, *Interviewing*, *Rejected*, and *Offered*.
+- **Follow-up Agent**: Periodically checks for stale applications (5+ days without response) and automatically drafts follow-up emails.
+
+### 🎤 5. Interview Prep & Voice Evaluation
+- **Voice Mock Interviews**: Practice standard or role-specific questions and record or paste answers to get score evaluation and improvement suggestions.
+
+### 🌐 6. Chrome Browser Extension
+- **1-Click URL Scraping**: Analyze any job posting page directly from your browser. Extract metadata, evaluate match scores, and save it to your dashboard.
+
+---
+
+## 📂 Project Layout
 
 ```text
-app.py                 CLI entry point
-backend/               FastAPI backend and routers
-core/                  Shared analysis, search, and generation logic
-frontend/              React + Vite web app
-input_jobs/            Sample and user job posters
-input_resumes/         Sample and user resumes
-input_kb/              Sample and user knowledge base files
-outputs/               Generated reports and drafts
-tracker/               CSV tracker, reminders, memory
+├── backend/                  # FastAPI backend
+│   ├── routers/              # Endpoint modules (Kanban, Scout, Extension, Match, etc.)
+│   ├── services/             # Integrations (Job sources, scraping, etc.)
+│   ├── database.py           # SQLAlchemy setup and SQLite schemas
+│   ├── job_indexer.py        # Hourly background prefetch daemon
+│   └── main.py               # Main application entry point
+├── core/                     # Shared Core Library (RAG, LLM engines, PDF generation)
+│   ├── engine.py             # LLM Analysis Engine (Groq / OpenRouter)
+│   ├── llm_provider.py       # Decoupled LLM factory
+│   ├── daily_scout.py        # Automated scout matching loops
+│   └── pdf_generator.py      # ATS-optimized PDF exports
+├── extension/                # Chrome Browser Extension (Manifest V3)
+├── frontend/                 # React + Vite frontend dashboard
+├── tracker/                  # Kanban CSV fallbacks and application memory
+└── app.py                    # Command-line interface tool
 ```
 
-## Setup
+---
 
-1. Install Python dependencies:
+## 🛠️ Installation & Setup
 
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- SQLite3
+
+### 1. Backend Setup
+1. Clone the repository and navigate to the project root.
+2. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Configure the environment variables. Copy `.env.example` to `.env` and populate:
+   ```env
+   GROQ_API_KEY=your_llm_api_key_here
+   ENABLE_JOB_ARTIFACTS=false
+   PREFETCH_INTERVAL_HOURS=1
+   ```
+
+### 2. Frontend Setup
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+2. Install Node packages:
+   ```bash
+   npm install
+   ```
+3. Build or run the development server:
+   ```bash
+   npm run dev
+   ```
+
+### 3. Load the Chrome Extension
+1. Open Google Chrome and navigate to `chrome://extensions/`.
+2. Toggle **Developer mode** on (top-right corner).
+3. Click **Load unpacked** (top-left) and select the `extension/` directory.
+
+---
+
+## 🚀 Running the Services
+
+### Start the Backend Server
+Run the FastAPI web service:
 ```bash
-pip install -r requirements.txt
+python -m uvicorn backend.main:app --reload --port 8000
 ```
+API Documentation will be accessible at: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-2. Configure your API key in a `.env` file:
-
-```env
-GROQ_API_KEY=your_groq_api_key_here
-```
-
-3. Add sample or real `.txt` / `.pdf` files to the input folders.
-
-4. Start the CLI:
-
+### Start the Background Prefetch Indexer
+To run the background prefetcher daemon continuously:
 ```bash
-python app.py
+python -m backend.job_indexer
 ```
 
-5. Start the web app:
-
+### Start the React Frontend Dashboard
+In the `frontend/` directory, run:
 ```bash
-cd frontend
-npm install
 npm run dev
 ```
-
-## Web App
-
-The web interface includes:
-
-- Dashboard analytics
-- Jobs browser and matching
-- Resume analyzer and re-analysis
-- Kanban application board
-- Daily Scout job discovery
-- Cover letter generator
-
-## Outputs
-
-Generated artifacts are written to `outputs/` and `tracker/`.
-
-### `outputs/`
-
-- `job_analysis_report.txt`
-- `skill_gap_report.txt`
-- `tailored_resume_suggestions.txt`
-- `interview_questions.txt`
-- `cover_letter.txt`
-- `linkedin_message.txt`
-- `final_agent_report.txt`
-- `final_agent_report.pdf` when PDF export is available
-
-### `tracker/`
-
-- `applications.csv`
-- `reminders.txt`
-- `memory.json`
-
-## Validation
-
-Recommended smoke checks:
-
-```bash
-python app.py
-cd frontend && npm run build
-```
-
-## Screenshots
-
-Add screenshots here when packaging or submitting the project.
-
-## Contributing
-
-1. Fork or branch.
-2. Make a focused change.
-3. Run the relevant backend or frontend validation.
-4. Open a pull request with a short summary.
-
-## License
-
-MIT
+Open [http://localhost:5173/](http://localhost:5173/) to access the dashboard.
