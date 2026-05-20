@@ -210,6 +210,16 @@ def search_jobs_endpoint(
                             "source": r[4],
                             "url": r[0] if (r[0] and r[0].startswith("http")) else "",
                         })
+                    if not any((job.get("source") or "").lower() == "rozee" for job in jobs):
+                        try:
+                            city_hint = (city or "").strip() or None
+                            rozee_city = city_hint
+                            if not rozee_city and (location or "").strip().lower() in {"", "pakistan", "remote", "uae", "uk"}:
+                                rozee_city = None
+                            rozee_jobs = _services.job_apis.fetch_rozee_pakistan(query, rozee_city, max_pages=1)
+                            jobs.extend(rozee_jobs)
+                        except Exception:
+                            pass
                     for job in jobs:
                         job["description"] = clean_text(job.get("description", ""))
                     return _upsert_jobs(db, jobs)
@@ -266,14 +276,22 @@ def search_jobs_stream(
         combined = []
         seen_keys = set()
 
+        city_hint = (city or '').strip() or None
+        location_hint = (location or '').strip().lower()
+        local_city = city_hint
+        if not local_city and location_hint in {'', 'pakistan', 'remote', 'uae', 'uk'}:
+            local_city = None
+        elif not local_city:
+            local_city = location
+
         # build list of source callables depending on location
         src_calls = []
         # fast sources
-        src_calls.append(lambda: _services.job_apis.fetch_rozee_pakistan(query, city or location, max_pages=1))
-        src_calls.append(lambda: _services.job_apis.fetch_mustakbil_pakistan(query, city or location, max_pages=1))
-        src_calls.append(lambda: _services.job_apis.fetch_bing_pakistan(query, city or location, max_pages=1))
+        src_calls.append(lambda: _services.job_apis.fetch_rozee_pakistan(query, local_city, max_pages=1))
+        src_calls.append(lambda: _services.job_apis.fetch_mustakbil_pakistan(query, local_city, max_pages=1))
+        src_calls.append(lambda: _services.job_apis.fetch_bing_pakistan(query, local_city, max_pages=1))
         src_calls.append(lambda: _services.job_apis.fetch_brightspyre(query, max_pages=1))
-        src_calls.append(lambda: _services.job_apis.fetch_linkedin_indexed(query, city or location, max_jobs=4))
+        src_calls.append(lambda: _services.job_apis.fetch_linkedin_indexed(query, local_city, max_jobs=4))
         src_calls.append(lambda: _services.job_apis.fetch_company_careers(query, company_limit=6))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(src_calls)) as executor:
@@ -316,7 +334,7 @@ def search_jobs_stream(
 
             if len(combined) < 5:
                 try:
-                    indexed = _services.job_apis.fetch_indexed_pakistan(query, city or location, max_urls=6)
+                    indexed = _services.job_apis.fetch_indexed_pakistan(query, local_city or location, max_urls=6)
                     new = []
                     for job in indexed:
                         job = _normalize_stream_job(job)
