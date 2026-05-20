@@ -89,6 +89,20 @@ def _is_job_url(url: str) -> bool:
 
 def _extract_job_info(url: str, title: str, snippet: str, keyword: str, city: str) -> Dict:
     """Extract job information from URL and snippet"""
+    if "rozee.pk" in (url or "").lower():
+        return {
+            "title": title or keyword,
+            "company": "Rozee.pk",
+            "city": city,
+            "location": city,
+            "salary": "",
+            "description": snippet or f"{title} job listing on Rozee.pk",
+            "url": url,
+            "apply_url": url,
+            "source": SOURCE,
+            "posted_date": "",
+        }
+
     try:
         html = request_html(url)
     except Exception:
