@@ -16,7 +16,7 @@ import logging
 _search_cache: Dict[str, tuple] = {}
 _logger = logging.getLogger(__name__)
 _SEARCH_CACHE_TTL = 30
-_SOURCE_TIMEOUT_SECONDS = 4
+_SOURCE_TIMEOUT_SECONDS = max(4, int(os.getenv("SOURCE_TIMEOUT_SECONDS", "8")))
 
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/{country}/search/1"
 REMOTIVE_URL = "https://remotive.com/api/remote-jobs"
@@ -433,9 +433,17 @@ def fetch_bing_pakistan(query: str, city: Optional[str] = None, max_pages: int =
     jobs = []
     for raw in raw_jobs:
         item = dict(raw)
-        item["source"] = "bing_jobs"
+        url_lower = str(item.get("url") or "").lower()
+        if "rozee.pk" in url_lower:
+            item["source"] = "rozee"
+        elif "mustakbil.com" in url_lower:
+            item["source"] = "mustakbil"
+        elif "brightspyre.com" in url_lower:
+            item["source"] = "brightspyre"
+        else:
+            item["source"] = "bing_jobs"
         item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
-        jobs.append(_normalize_job(item, "bing_jobs"))
+        jobs.append(_normalize_job(item, item["source"]))
     return _filter_city([job for job in jobs if _matches_remote_title(job, query)], city)
 
 
