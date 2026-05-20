@@ -45,21 +45,35 @@ def log_retry(retry_state):
 
 class LLMProvider:
     def __init__(self):
-        self.api_key = os.getenv("GROQ_API_KEY")
-        self.provider_type = self._detect_provider()
+        self.groq_api_key = (os.getenv("GROQ_API_KEY") or "").strip()
+        self.openrouter_api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
+        self.provider_type, self.api_key = self._detect_provider_and_key()
     
-    def _detect_provider(self):
-        if not self.api_key:
-            return None
-        if self.api_key.startswith("sk-or-v1-"):
-            return "openrouter"
-        elif self.api_key.startswith("gsk_"):
-            return "groq"
-        return None
+    def _detect_provider_and_key(self):
+        provider_hint = (os.getenv("LLM_PROVIDER") or "").strip().lower()
+
+        if provider_hint == "groq" and self.groq_api_key:
+            return "groq", self.groq_api_key
+        if provider_hint == "openrouter" and self.openrouter_api_key:
+            return "openrouter", self.openrouter_api_key
+
+        # Backward compatibility: some environments historically placed the
+        # OpenRouter key in GROQ_API_KEY.
+        if self.groq_api_key.startswith("sk-or-v1-"):
+            return "openrouter", self.groq_api_key
+        if self.groq_api_key.startswith("gsk_"):
+            return "groq", self.groq_api_key
+
+        if self.openrouter_api_key:
+            return "openrouter", self.openrouter_api_key
+        if self.groq_api_key:
+            return "groq", self.groq_api_key
+
+        return None, ""
     
     def ask(self, system_prompt: str, user_prompt: str, temperature: float = 0.7) -> str:
         """Unified interface for LLM calls with retry logic"""
-        if not self.provider_type:
+        if not self.provider_type or not self.api_key:
             return "AI error: No valid API key configured"
         
         try:

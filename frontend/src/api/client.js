@@ -1,4 +1,4 @@
-﻿import axios from 'axios'
+import axios from 'axios'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -8,6 +8,52 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+export function getApiErrorMessage(error) {
+  const payload = error?.response?.data
+  if (payload && typeof payload === 'object') {
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message.trim()
+    }
+    if (typeof payload.detail === 'string' && payload.detail.trim()) {
+      return payload.detail.trim()
+    }
+    if (Array.isArray(payload.detail)) {
+      return payload.detail.map(d => d.msg || JSON.stringify(d)).join('; ')
+    }
+    if (typeof payload.error === 'string' && payload.error.trim()) {
+      return payload.error.trim()
+    }
+  }
+
+  if (typeof error?.message === 'string' && error.message.trim()) {
+    return error.message.trim()
+  }
+
+  return 'Something went wrong. Please try again.'
+}
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status || 0
+    const message = getApiErrorMessage(error)
+    const normalized = {
+      error: true,
+      message,
+      code: status,
+    }
+
+    if (error.response) {
+      error.response.data = normalized
+    }
+
+    error.message = message
+    error.userMessage = message
+    error.apiError = normalized
+    return Promise.reject(error)
+  },
+)
 
 export const resumeAPI = {
   analyze: (file) => {
@@ -38,6 +84,7 @@ export const jobsAPI = {
       },
     }),
   match: (jobId) => apiClient.get(`/jobs/${jobId}/match`),
+  upsert: (job) => apiClient.post('/jobs/upsert', job),
   explainMatch: (payload) => apiClient.post('/jobs/explain-match', payload),
   salaryEstimate: (payload) => apiClient.post('/jobs/salary-estimate', payload),
   autocomplete: (query) => apiClient.get('/jobs/autocomplete', { params: { query } }),
@@ -49,7 +96,8 @@ export const profileAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   exists: () => apiClient.get('/profile'),
-  select: (id) => apiClient.post('/profile/select', { profile_id: id }),
+  select: (id) => apiClient.post(`/profile/select/${id}`),
+  selected: () => apiClient.get('/profile/selected'),
   get: (id) => apiClient.get(`/profile/${id}`),
   update: (id, formData) => apiClient.patch(`/profile/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   list: (page = 1, per_page = 10) => apiClient.get('/profile', { params: { page, per_page } }),

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.schemas import SkillGapRequest, SkillGapResponse, InterviewPrepRequest, InterviewPrepResponse, InterviewQuestion
@@ -25,8 +25,8 @@ Return JSON: {{"missing_skills": ["skill1", "skill2"], "frequency": {{"skill1": 
     try:
         data = json.loads(response)
         return SkillGapResponse(**data)
-    except Exception:
-        return SkillGapResponse(missing_skills=["parsing error"], frequency={})
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Failed to parse skill gap analysis response")
 
 @router.post("/interview-prep", response_model=InterviewPrepResponse)
 def interview_prep(req: InterviewPrepRequest, db: Session = Depends(get_db)):
@@ -40,6 +40,5 @@ Return JSON: {{"questions": [{{"question": "...", "suggested_answer": "..."}}]}}
         data = json.loads(response)
         questions = [InterviewQuestion(**q) for q in data["questions"]]
         return InterviewPrepResponse(questions=questions)
-    except Exception:
-        # fallback
-        return InterviewPrepResponse(questions=[InterviewQuestion(question="AI error – try again.", suggested_answer="")])
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Failed to parse interview prep questions")

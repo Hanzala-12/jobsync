@@ -1,7 +1,7 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Button from '../components/Button'
-import { resumeAPI } from '../api/client'
+import { profileAPI, resumeAPI } from '../api/client'
 import './Resume.css'
 
 const TABS = ['analyze', 'rewrite', 'versions']
@@ -21,6 +21,7 @@ function Resume() {
   const [jobType, setJobType] = useState('General')
   const [rewriteResult, setRewriteResult] = useState(null)
   const [rewriting, setRewriting] = useState(false)
+  const [rewriteError, setRewriteError] = useState('')
 
   const [versions, setVersions] = useState([])
   const [versionName, setVersionName] = useState('')
@@ -35,6 +36,33 @@ function Resume() {
       setRewriteJobDescription(location.state.jobDescription)
     }
   }, [location.state])
+
+  useEffect(() => {
+    if (resumeText.trim()) return
+
+    const cached = (localStorage.getItem('jobsync_resume_text') || '').trim()
+    if (cached) {
+      setResumeText(cached)
+      return
+    }
+
+    ;(async () => {
+      try {
+        const res = await profileAPI.selected()
+        const text = String(res?.data?.profile?.resume_text || '')
+        if (!text.trim()) return
+
+        const marker = text.toLowerCase().indexOf('resume text:')
+        const extracted = marker >= 0 ? text.slice(marker + 'resume text:'.length).trim() : text.trim()
+        if (extracted) {
+          setResumeText(extracted)
+          localStorage.setItem('jobsync_resume_text', extracted)
+        }
+      } catch {
+        // best-effort prefill only
+      }
+    })()
+  }, [resumeText])
 
   const loadVersions = async () => {
     const response = await resumeAPI.listVersions()
@@ -68,6 +96,7 @@ function Resume() {
 
   const rewriteResume = async () => {
     setRewriting(true)
+    setRewriteError('')
     try {
       const response = await resumeAPI.rewrite({
         resume_text: resumeText,
@@ -76,6 +105,9 @@ function Resume() {
       })
       setRewriteResult(response.data)
       localStorage.setItem('jobsync_resume_text', response.data?.rewritten || resumeText)
+    } catch (error) {
+      setRewriteResult(null)
+      setRewriteError(error?.userMessage || error?.message || 'Resume rewrite failed. Please try again.')
     } finally {
       setRewriting(false)
     }
@@ -207,7 +239,7 @@ function Resume() {
 
           <section className="card-box">
             {!rewriteResult ? (
-              <div className="empty-state">AI rewrite output will appear here.</div>
+              <div className="empty-state">{rewriteError || 'AI rewrite output will appear here.'}</div>
             ) : (
               <>
                 <p className="stats-text">

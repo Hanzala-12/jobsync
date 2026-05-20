@@ -2,10 +2,10 @@ import json
 from typing import List, Optional
 import re
 
-from fastapi import APIRouter, Depends
+from concurrent.futures import ThreadPoolExecutor
+from fastapi import APIRouter, Depends, HTTPException
 from starlette.responses import StreamingResponse
 import json
-import threading
 import concurrent.futures
 import time as _time
 import logging
@@ -16,10 +16,11 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Job, UserProfile
 from backend.schemas import (
+    ExplainMatchRequest,
     JobMatch,
-    JobMatchExplainRequest,
     JobMatchExplainResponse,
     JobOut,
+    JobUpsert,
     SalaryEstimateRequest,
     SalaryEstimateResponse,
 )
@@ -32,6 +33,15 @@ from backend.database import engine
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 _logger = logging.getLogger(__name__)
+_MAX_BG_WORKERS = max(1, int(os.getenv("MAX_BG_WORKERS", "5")))
+_BG_EXECUTOR = ThreadPoolExecutor(max_workers=_MAX_BG_WORKERS, thread_name_prefix="jobsync-bg")
+
+
+def shutdown_background_executor():
+    try:
+        _BG_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+    except Exception:
+        _logger.exception("Failed to shut down background executor")
 
 
 def _extract_json(response: str, fallback):
@@ -92,55 +102,56 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
         saved_jobs.append(saved_job)
 
         if resume_summary and saved_job and getattr(saved_job, "id", None) and cover_enabled:
-            # Run cover letter generation asynchronously to avoid blocking search response.
-            def _bg_generate(job_id, resume_text, company, role, job_description, source, job_url):
-                try:
-                    from backend.database import SessionLocal
-                    from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
-
-                    db_session = SessionLocal()
-                    try:
-                        draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
-                            job_description,
-                            resume_text,
-                            company_name=company,
-                            role=role,
-                            tone="professional",
-                            top_k=5,
-                            metadata_filter={"company": company} if company else None,
-                        )
-                        save_cover_letter_artifacts(
-                            job_id,
-                            draft,
-                            source_ids,
-                            retrieved_chunks,
-                            metadata={
-                                "company": company,
-                                "role": role,
-                                "source": source,
-                                "job_url": job_url,
-                            },
-                        )
-                    finally:
-                        try:
-                            db_session.close()
-                        except Exception:
-                            pass
-                except Exception as exc:
-                    _logger.exception("Background cover letter generation failed: %s", exc)
-
             try:
-                t = threading.Thread(
-                    target=_bg_generate,
-                    args=(saved_job.id, resume_summary, saved_job.company or raw_job["company"], saved_job.title or raw_job["title"], saved_job.description or raw_job["description"], saved_job.source, saved_job.url),
+                future = _BG_EXECUTOR.submit(
+                    _bg_generate_cover_letter,
+                    saved_job.id,
+                    resume_summary,
+                    saved_job.company or raw_job["company"],
+                    saved_job.title or raw_job["title"],
+                    saved_job.description or raw_job["description"],
+                    saved_job.source,
+                    saved_job.url,
                 )
-                t.daemon = True
-                t.start()
+                future.add_done_callback(_log_background_future_error)
             except Exception:
-                _logger.exception("Failed to start cover letter background thread")
+                _logger.exception("Failed to submit cover letter background task")
                 _logger.warning("Cover letter generation enabled but background threading unavailable; generation may block search responses.")
 
     return saved_jobs
+
+
+def _log_background_future_error(future):
+    try:
+        future.result()
+    except Exception:
+        _logger.exception("Background cover letter generation failed")
+
+
+def _bg_generate_cover_letter(job_id, resume_text, company, role, job_description, source, job_url):
+    from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
+
+    draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
+        job_description,
+        resume_text,
+        company_name=company,
+        role=role,
+        tone="professional",
+        top_k=5,
+        metadata_filter={"company": company} if company else None,
+    )
+    save_cover_letter_artifacts(
+        job_id,
+        draft,
+        source_ids,
+        retrieved_chunks,
+        metadata={
+            "company": company,
+            "role": role,
+            "source": source,
+            "job_url": job_url,
+        },
+    )
 
 
 @router.get("/search", response_model=List[JobOut])
@@ -211,9 +222,7 @@ def search_jobs_endpoint(
             except Exception:
                 pass
 
-        t = threading.Thread(target=_bg_update_cache, args=(jobs,))
-        t.daemon = True
-        t.start()
+        _BG_EXECUTOR.submit(_bg_update_cache, jobs)
     except Exception:
         pass
 
@@ -356,7 +365,7 @@ Respond as JSON: {{"percentage": number, "explanation": "string", "missing_skill
     raw = llm.ask("You are a hiring expert.", prompt)
     # If the provider returned an explicit error string, propagate it as a 503
     if isinstance(raw, str) and raw.startswith("AI error:"):
-        return JSONResponse({"error": raw}, status_code=503)
+        raise HTTPException(status_code=503, detail=raw.replace("AI error:", "").strip() or "AI provider unavailable")
 
     data = _extract_json(
         raw,
@@ -371,8 +380,43 @@ Respond as JSON: {{"percentage": number, "explanation": "string", "missing_skill
     )
 
 
+@router.post("/upsert", response_model=JobOut)
+def upsert_job(payload: JobUpsert, db: Session = Depends(get_db)):
+    """Create or update a job in the local DB and return the stored job object.
+
+    Accepts a dict with keys similar to the job objects returned by scrapers
+    (title, company, description, url, source, external_id, location, city, etc.).
+    """
+    try:
+        raw_job = {
+            "title": clean_text(str(payload.title or "")),
+            "company": clean_text(str(payload.company or "")),
+            "city": payload.city or payload.location or "",
+            "location": payload.location or payload.city or "",
+            "description": clean_text(str(payload.description or "")),
+            "apply_url": payload.apply_url or payload.url or "",
+            "url": payload.url or payload.apply_url or "",
+            "posted_date": payload.posted_date or "",
+            "salary": payload.salary or "",
+            "external_id": str(payload.external_id or payload.url or "").strip() or None,
+            "source": payload.source or "unknown",
+        }
+
+        normalized = normalize_job(raw_job, str(raw_job.get("source") or "unknown"))
+        saved_job, _ = process_incoming_job(db, normalized)
+        if not saved_job:
+            raise HTTPException(status_code=500, detail="Failed to upsert job")
+
+        return saved_job
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _logger.exception("Upsert job failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Upsert failed")
+
+
 @router.post("/explain-match", response_model=JobMatchExplainResponse)
-def explain_match(payload: JobMatchExplainRequest):
+def explain_match(payload: ExplainMatchRequest):
     llm = LLMProvider()
     prompt = f"""Analyze this resume against this job description.
 Write 3 paragraphs in plain English:

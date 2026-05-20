@@ -34,6 +34,8 @@ wheels/
 jobsync.db
 job_copilot.db
 chroma_db/
+selected_profile.json
+backend/selected_profile.json
 
 
 # IDE

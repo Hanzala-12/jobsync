@@ -25,6 +25,14 @@ class UserProfile(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    selected_profile_id = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class Job(Base):
     __tablename__ = "jobs"
 

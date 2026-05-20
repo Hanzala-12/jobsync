@@ -137,7 +137,26 @@ function Jobs() {
     setMatchModalLoading(true)
     setMatchModalResult(null)
     try {
-      const res = await jobsAPI.match(job.id)
+      let jobId = job.id
+      // If the job isn't stored locally yet, upsert it first so we have an id to match against
+      if (!jobId) {
+        try {
+          const up = await jobsAPI.upsert(job)
+          jobId = up.data?.id || up.data?.job_id || null
+          // update local job object so buttons/UX reflect stored state
+          if (jobId) job.id = jobId
+        } catch (upErr) {
+          console.error('Upsert failed', upErr)
+        }
+      }
+
+      if (!jobId) {
+        // couldn't create job on server
+        setMatchModalResult({ match_percentage: null, explanation: 'Failed to create job record on server', missing_skills: null, error: true })
+        return
+      }
+
+      const res = await jobsAPI.match(jobId)
       setMatchModalResult(res.data)
     } catch (e) {
       // Mark as an error result so the UI can show a proper message
@@ -326,7 +345,14 @@ function Jobs() {
             <div className="divider" />
             <div className="job-actions">
               <a href={job.url} target="_blank" rel="noreferrer">View Job {'->'}</a>
-              <button type="button" onClick={() => openMatch(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Match Me</button>
+              <button
+                type="button"
+                onClick={() => openMatch(job)}
+                disabled={!profileExists}
+                title={!profileExists ? 'Complete your profile' : ''}
+              >
+                Match Me
+              </button>
               <button type="button" onClick={() => handleBuildResume(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Build Resume</button>
               <button type="button" onClick={() => handleCoverLetter(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Cover Letter</button>
               <button type="button" className="salary-link" onClick={() => openSalary(job, index)}>Est. Salary</button>
@@ -390,7 +416,13 @@ function Jobs() {
                             <span key={i} className="missing-skill-chip">{s}</span>
                           ))
                         ) : (
-                          <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
+                          // Only show "Perfect Match" when the score is effectively 100%
+                          (matchModalResult.match_percentage !== null && matchModalResult.match_percentage >= 99) ? (
+                            <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
+                          ) : (
+                            // For empty arrays that are not true perfect matches, show a clearer message
+                            <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No detailed analysis available</span>
+                          )
                         )
                       ) : (
                         <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No analysis available</span>

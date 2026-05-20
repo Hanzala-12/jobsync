@@ -1,7 +1,7 @@
 """
 Browser Extension API - Import jobs from URLs
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from core.url_ingestion import extract_job_text_from_url
@@ -20,10 +20,10 @@ def analyze_url(req: URLAnalyze, db: Session = Depends(get_db)):
     job_data = extract_job_text_from_url(req.url)
     
     if not job_data.get("success"):
-        return {
-            "success": False,
-            "error": job_data.get("error", "Failed to extract job data")
-        }
+        raise HTTPException(
+            status_code=400,
+            detail=job_data.get("error", "Failed to extract job data")
+        )
     
     normalized = normalize_job(
         {

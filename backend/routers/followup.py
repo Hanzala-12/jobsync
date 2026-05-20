@@ -1,7 +1,7 @@
 """
 Follow-up Agent - Automated follow-up reminders and drafts
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from core.database import get_db
 from backend.models import Application, ApplicationStatus
@@ -63,7 +63,7 @@ def mark_followup_sent(app_id: int, db: Session = Depends(get_db)):
     app = db.query(Application).filter(Application.id == app_id).first()
     
     if not app:
-        return {"error": "Application not found"}
+        raise HTTPException(status_code=404, detail="Application not found")
     
     app.follow_up_date = datetime.now()
     app.next_action = "Wait for response"

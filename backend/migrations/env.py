@@ -9,13 +9,17 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from backend.database import Base
+from backend.database import Base, DATABASE_URL
 # Import all models to register them on Base.metadata
 from backend.models import UserProfile, Job, Application, ResumeVersion, PrefetchedJob
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Keep Alembic pointed at the same DB URL the app uses, regardless of cwd.
+if DATABASE_URL:
+    config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

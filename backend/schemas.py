@@ -1,8 +1,6 @@
 ﻿from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import Field
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -77,6 +75,31 @@ class JobOut(ORMBase):
     salary: Optional[str] = None
 
 
+class JobUpsert(BaseModel):
+    title: Optional[str] = None
+    company: Optional[str] = None
+    description: Optional[str] = None
+    url: Optional[str] = None
+    apply_url: Optional[str] = None
+    source: Optional[str] = None
+    external_id: Optional[str] = None
+    location: Optional[str] = None
+    city: Optional[str] = None
+    posted_date: Optional[str] = None
+    salary: Optional[str] = None
+    job_type: Optional[str] = None
+    experience_required: Optional[str] = None
+
+
+class ExplainMatchRequest(BaseModel):
+    job_description: str
+    resume_text: str
+
+
+class JobMatchExplainRequest(ExplainMatchRequest):
+    pass
+
+
 class JobMatch(BaseModel):
     job_id: int
     match_percentage: float
@@ -97,6 +120,17 @@ class JobMatchExplainResponse(BaseModel):
     matched_skills: List[str]
     missing_skills: List[str]
     quick_win: str
+
+
+class ApiErrorResponse(BaseModel):
+    error: bool = True
+    message: str
+    code: int
+
+
+class HealthResponse(BaseModel):
+    status: str
+    database: str
 
 
 class SalaryEstimateRequest(BaseModel):
