@@ -140,7 +140,8 @@ function Jobs() {
       const res = await jobsAPI.match(job.id)
       setMatchModalResult(res.data)
     } catch (e) {
-      setMatchModalResult({ match_percentage: 0, explanation: 'Failed to fetch match', missing_skills: [] })
+      // Mark as an error result so the UI can show a proper message
+      setMatchModalResult({ match_percentage: null, explanation: 'Failed to fetch match', missing_skills: null, error: true })
     } finally {
       setMatchModalLoading(false)
     }
@@ -366,27 +367,43 @@ function Jobs() {
               </div>
             ) : (
               <div className="match-modal-body">
-                <h3>Match Score: {matchModalResult ? Math.round(matchModalResult.match_percentage) : 0}%</h3>
+                <h3>Match Score: {matchModalResult && matchModalResult.match_percentage !== null ? Math.round(matchModalResult.match_percentage) + '%' : 'N/A'}</h3>
                 <div className="match-progress">
-                  <div className="match-progress-bar" style={{ width: `${Math.min(100, matchModalResult ? matchModalResult.match_percentage : 0)}%` }} />
+                  <div
+                    className="match-progress-bar"
+                    style={{ width: `${matchModalResult && matchModalResult.match_percentage !== null ? Math.min(100, matchModalResult.match_percentage) : 0}%` }}
+                  />
                 </div>
-                
-                <h4>Missing Skills</h4>
-                <div className="missing-skills-container">
-                  {(matchModalResult && matchModalResult.missing_skills && matchModalResult.missing_skills.length > 0) ? (
-                    matchModalResult.missing_skills.map((s, i) => (
-                      <span key={i} className="missing-skill-chip">{s}</span>
-                    ))
-                  ) : (
-                    <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
-                  )}
-                </div>
-                
-                <h4>Analysis Explanation</h4>
-                <p className="match-explanation">
-                  {matchModalResult ? matchModalResult.explanation : 'No explanation available.'}
-                </p>
-                
+
+                {matchModalResult && matchModalResult.error ? (
+                  <div className="match-error">
+                    <p><strong>Analysis unavailable:</strong> {matchModalResult.explanation}</p>
+                    <p>Please try again later.</p>
+                  </div>
+                ) : (
+                  <>
+                    <h4>Missing Skills</h4>
+                    <div className="missing-skills-container">
+                      {matchModalResult && Array.isArray(matchModalResult.missing_skills) ? (
+                        matchModalResult.missing_skills.length > 0 ? (
+                          matchModalResult.missing_skills.map((s, i) => (
+                            <span key={i} className="missing-skill-chip">{s}</span>
+                          ))
+                        ) : (
+                          <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
+                        )
+                      ) : (
+                        <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No analysis available</span>
+                      )}
+                    </div>
+
+                    <h4>Analysis Explanation</h4>
+                    <p className="match-explanation">
+                      {matchModalResult && matchModalResult.explanation ? matchModalResult.explanation : 'No explanation available.'}
+                    </p>
+                  </>
+                )}
+
                 <div className="match-modal-actions">
                   <button className="match-modal-close-btn" onClick={() => setMatchModalOpen(false)}>Close</button>
                 </div>
