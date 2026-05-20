@@ -236,8 +236,8 @@ async def upload_profile(
     db.commit()
     db.refresh(new_profile)
 
-    # Chunk and embed via existing ingestion utilities
-    await _index_profile_text(profile_text)
+    if os.getenv("ENABLE_PROFILE_INDEXING", "").strip().lower() in {"1", "true", "yes", "on"}:
+        await _index_profile_text(profile_text)
 
     return {"status": "success", "message": "Profile saved", "id": new_profile.id}
 
