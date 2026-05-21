@@ -19,10 +19,15 @@ def main() -> None:
     parser.add_argument("--program-limit", type=int, default=50, help="Number of programs to refresh per profile")
     parser.add_argument("--daemon", action="store_true", help="Run continuously and refresh on a fixed interval")
     parser.add_argument("--interval-hours", type=int, default=24, help="Daemon refresh interval in hours")
+    parser.add_argument("--once", action="store_true", help="Run one iteration and exit (alias for non-daemon)")
     args = parser.parse_args()
 
     db = SessionLocal()
     try:
+        # If --once is provided, run a single iteration and exit regardless of --daemon
+        if args.once:
+            args.daemon = False
+
         if args.daemon:
             while True:
                 results = refresh_match_cache(db, profile_limit=args.profile_limit, program_limit=args.program_limit)

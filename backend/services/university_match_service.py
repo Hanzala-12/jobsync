@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
+import logging
 
 from backend.models import Program, StudentProfile, StudentProgramMatch, University
 from core.llm_provider import LLMProvider
@@ -184,24 +185,47 @@ def index_program_embedding(program: Program, university: University, *, delete_
 
     document = _program_document(program, university)
     document_version = _now().isoformat()
-    collection.add(
-        ids=[f"program_{program.id}_{document_version}"],
-        documents=[document],
-        metadatas=[
-            {
-                "doc_type": PROGRAM_DOC_TYPE,
-                "program_id": program.id,
-                "university_id": university.id,
-                "university_name": university.name,
-                "country": university.country,
-                "ranking": university.ranking_global or university.ranking,
-                "tuition": program.estimated_tuition_fees,
-                "living_cost": program.living_cost_estimate,
-                "total_cost": (program.estimated_tuition_fees or 0) + (program.living_cost_estimate or 0),
-            }
-        ],
-        embeddings=[_embedding(document)],
-    )
+    raw_metadata = {
+        "doc_type": PROGRAM_DOC_TYPE,
+        "program_id": program.id,
+        "university_id": university.id,
+        "university_name": university.name,
+        "country": university.country,
+        "ranking": university.ranking_global or university.ranking,
+        "tuition": program.estimated_tuition_fees,
+        "living_cost": program.living_cost_estimate,
+        "total_cost": (program.estimated_tuition_fees or 0) + (program.living_cost_estimate or 0),
+    }
+
+    def _sanitize_value(v):
+        # Allow simple JSON-serializable primitives; fallback to string for others
+        from datetime import datetime
+
+        if v is None:
+            return ""
+        if isinstance(v, (str, bool, int, float)):
+            return v
+        if isinstance(v, datetime):
+            return v.isoformat()
+        try:
+            return float(v) if isinstance(v, (bytes, bytearray)) is False and isinstance(v, (int, float)) else str(v)
+        except Exception:
+            return str(v)
+
+    safe_metadata = {k: _sanitize_value(v) for k, v in raw_metadata.items()}
+
+    try:
+        collection.add(
+            ids=[f"program_{program.id}_{document_version}"],
+            documents=[document],
+            metadatas=[safe_metadata],
+            embeddings=[_embedding(document)],
+        )
+    except Exception as exc:
+        # Log diagnostic details (avoid printing to stdout)
+        diag = {k: (type(v).__name__, repr(v)) for k, v in safe_metadata.items()}
+        logging.debug("Chroma metadata conversion failed for program id %s metadata types: %s", program.id, diag)
+        raise
     return document_version
 
 
