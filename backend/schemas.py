@@ -252,3 +252,280 @@ class InterviewQuestion(BaseModel):
 
 class InterviewPrepResponse(BaseModel):
     questions: List[InterviewQuestion]
+
+
+class UniversityBase(BaseModel):
+    name: str
+    country: str
+    city: str
+    website: Optional[str] = None
+    ranking: Optional[str] = None
+    ranking_global: Optional[int] = None
+    logo_url: Optional[str] = None
+    acceptance_rate: Optional[float] = None
+    accreditation: Optional[str] = None
+    student_population: Optional[int] = None
+
+
+class UniversityCreate(UniversityBase):
+    pass
+
+
+class UniversityOut(ORMBase):
+    id: int
+    name: str
+    country: str
+    city: str
+    website: Optional[str] = None
+    ranking: Optional[str] = None
+    ranking_global: Optional[int] = None
+    logo_url: Optional[str] = None
+    acceptance_rate: Optional[float] = None
+    accreditation: Optional[str] = None
+    student_population: Optional[int] = None
+
+
+class ProgramBase(BaseModel):
+    university_id: int
+    name: str
+    degree_level: str
+    duration_years: int
+    estimated_tuition_fees: int
+    currency: str
+    min_gpa: Optional[float] = None
+    ranking_global: Optional[int] = None
+    ranking_national: Optional[int] = None
+    min_ielts: Optional[float] = None
+    min_toefl: Optional[int] = None
+    application_deadline: Optional[str] = None
+    semester_intake: Optional[str] = None
+    living_cost_estimate: Optional[int] = None
+    scholarship_available: bool = False
+    program_url: Optional[str] = None
+
+
+class ProgramCreate(ProgramBase):
+    pass
+
+
+class ProgramOut(ORMBase):
+    id: int
+    university_id: int
+    name: str
+    degree_level: str
+    duration_years: int
+    estimated_tuition_fees: int
+    currency: str
+    min_gpa: Optional[float] = None
+    ranking_global: Optional[int] = None
+    ranking_national: Optional[int] = None
+    min_ielts: Optional[float] = None
+    min_toefl: Optional[int] = None
+    application_deadline: Optional[str] = None
+    semester_intake: Optional[str] = None
+    living_cost_estimate: Optional[int] = None
+    scholarship_available: bool = False
+    program_url: Optional[str] = None
+
+
+class StudentProfileBase(BaseModel):
+    gpa: float
+    gre_score: Optional[int] = None
+    toefl_score: Optional[int] = None
+    ielts_score: Optional[float] = None
+    budget_per_year: int
+    preferred_countries: List[str] = Field(default_factory=list)
+    intended_major: str
+    degree_level: str
+    academic_background: Optional[str] = None
+
+
+class StudentProfileCreate(StudentProfileBase):
+    pass
+
+
+class StudentProfileOut(ORMBase):
+    id: int
+    gpa: float
+    gre_score: Optional[int] = None
+    toefl_score: Optional[int] = None
+    ielts_score: Optional[float] = None
+    budget_per_year: int
+    preferred_countries: List[str]
+    intended_major: str
+    degree_level: str
+    academic_background: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class UniversityRecommendationRequest(BaseModel):
+    student_profile_id: int
+    intended_major: str
+
+
+class UniversityRecommendationItem(BaseModel):
+    university: UniversityOut
+    program: ProgramOut
+    match_score: int
+    explanation: str
+    cached: bool = False
+    cache_expires_at: Optional[datetime] = None
+
+
+class UniversityRecommendationResponse(BaseModel):
+    student_profile: StudentProfileOut
+    recommendations: List[UniversityRecommendationItem]
+
+
+class ScholarshipBase(BaseModel):
+    name: str
+    university_id: int
+    amount_usd: Optional[int] = None
+    deadline: Optional[str] = None
+    eligibility_criteria: Optional[str] = None
+    application_url: Optional[str] = None
+
+
+class ScholarshipCreate(ScholarshipBase):
+    pass
+
+
+class ScholarshipOut(ORMBase):
+    id: int
+    name: str
+    university_id: int
+    amount_usd: Optional[int] = None
+    deadline: Optional[str] = None
+    eligibility_criteria: Optional[str] = None
+    application_url: Optional[str] = None
+
+
+class UniversityProgramGroup(BaseModel):
+    university: UniversityOut
+    programs: List[ProgramOut]
+
+
+class UniversityFilterResponse(BaseModel):
+    page: int
+    limit: int
+    total: int
+    items: List[UniversityProgramGroup]
+
+
+class UniversityDetailResponse(BaseModel):
+    university: UniversityOut
+    programs: List[ProgramOut]
+    scholarships: List[ScholarshipOut]
+
+
+class StudentProfileUpdate(BaseModel):
+    gpa: Optional[float] = None
+    gre_score: Optional[int] = None
+    toefl_score: Optional[int] = None
+    ielts_score: Optional[float] = None
+    budget_per_year: Optional[int] = None
+    preferred_countries: Optional[List[str]] = None
+    intended_major: Optional[str] = None
+    degree_level: Optional[str] = None
+    academic_background: Optional[str] = None
+
+
+class StudentProgramMatchBase(BaseModel):
+    student_id: int
+    program_id: int
+    match_score: int
+    academic_fit: int
+    budget_fit: int
+    location_fit: int
+    missing_requirements: List[str] = Field(default_factory=list)
+    strengths: List[str] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+    summary: str
+    computed_at: datetime
+    expires_at: datetime
+
+
+class StudentProgramMatchOut(ORMBase):
+    id: int
+    student_id: int
+    program_id: int
+    match_score: int
+    academic_fit: int
+    budget_fit: int
+    location_fit: int
+    missing_requirements: List[str]
+    strengths: List[str]
+    recommendations: List[str]
+    summary: str
+    computed_at: datetime
+    expires_at: datetime
+
+
+class UniversityMatchRecommendRequest(BaseModel):
+    student_profile_id: int
+    limit: int = 20
+    min_match_score: int = 0
+    sort_by: str = "match_score"
+    filter_countries: List[str] = Field(default_factory=list)
+    filter_max_tuition: Optional[int] = None
+    filter_scholarship_only: bool = False
+
+
+class UniversityMatchProgramItem(BaseModel):
+    university: UniversityOut
+    program: ProgramOut
+    vector_similarity: int
+    match: StudentProgramMatchOut
+    cached: bool = False
+
+
+class UniversityMatchRecommendResponse(BaseModel):
+    student_profile: StudentProfileOut
+    results: List[UniversityMatchProgramItem]
+
+
+class UniversityMatchDetailResponse(BaseModel):
+    student_profile: StudentProfileOut
+    university: UniversityOut
+    program: ProgramOut
+    match: StudentProgramMatchOut
+    analysis: Dict[str, object]
+
+
+class StudentSaveRequest(BaseModel):
+    student_id: int
+    program_id: int
+
+
+class SavedProgramOut(ORMBase):
+    id: int
+    student_id: int
+    program_id: int
+    saved_at: datetime
+    program: Optional[ProgramOut] = None
+    university: Optional[UniversityOut] = None
+
+
+class StudentApplyRequest(BaseModel):
+    student_id: int
+    program_id: int
+    notes: Optional[str] = None
+
+
+class StudyApplicationUpdate(BaseModel):
+    status: str
+    notes: Optional[str] = None
+
+
+class StudyApplicationOut(ORMBase):
+    id: int
+    student_id: int
+    program_id: int
+    status: str
+    notes: Optional[str] = None
+    applied_at: Optional[datetime] = None
+    deadline: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    program: Optional[ProgramOut] = None
+    university: Optional[UniversityOut] = None

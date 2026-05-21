@@ -1,42 +1,23 @@
 import os
-from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-_repo_root = Path(__file__).resolve().parents[1]
+load_dotenv()
 
-if os.getenv("VERCEL"):
-    # Vercel filesystem is ephemeral/read-only outside /tmp for serverless functions.
-    _default_sqlite_path = Path("/tmp/jobsync.db")
+DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
+
+# Support a production DATABASE_URL (Postgres). If missing, fall back to a local SQLite for
+# development convenience. This avoids hard failures in local dev while ensuring production
+# uses the provided DATABASE_URL (e.g. Supabase).
+if DATABASE_URL:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 else:
-    _default_sqlite_path = (_repo_root / "jobsync.db").resolve()
-
-_default_database_url = f"sqlite:///{_default_sqlite_path.as_posix()}"
-
-DATABASE_URL = os.getenv("DATABASE_URL", _default_database_url)
-SQLITE_TIMEOUT_SECONDS = max(30, int(os.getenv("SQLITE_TIMEOUT_SECONDS", "30")))
-
-engine_kwargs = {"pool_pre_ping": True}
-if DATABASE_URL.startswith("sqlite"):
-    engine_kwargs["connect_args"] = {
-        "check_same_thread": False,
-        "timeout": SQLITE_TIMEOUT_SECONDS,
-    }
-
-engine = create_engine(DATABASE_URL, **engine_kwargs)
-
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-
-    cursor = dbapi_connection.cursor()
-    try:
-        cursor.execute("PRAGMA journal_mode=WAL;")
-        cursor.execute(f"PRAGMA busy_timeout={SQLITE_TIMEOUT_SECONDS * 1000};")
-    finally:
-        cursor.close()
+    # Local development fallback
+    sqlite_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dev.db"))
+    sqlite_url = f"sqlite:///{sqlite_path}"
+    engine = create_engine(sqlite_url, connect_args={"check_same_thread": False}, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

@@ -104,7 +104,7 @@ function Dashboard() {
         <p className="subtitle">Track your weekly application health and execution.</p>
       </div>
 
-      <section className="health-card">
+      <section className="health-card panel-raised">
         <div className="health-left">
           <p className="score-value">{health?.score ?? 0}</p>
           <p className={`grade ${getGradeClass(health?.grade || 'F')}`}>{health?.grade || 'F'}</p>
@@ -116,6 +116,7 @@ function Dashboard() {
         </div>
 
         <div className="health-right">
+          <p className="section-label">Suggested Actions</p>
           {topImprovements.map((item, index) => (
             <label key={`${item}-${index}`} className="improvement-row">
               <input
@@ -131,22 +132,22 @@ function Dashboard() {
       </section>
 
       <section className="stats-row">
-        <article className="stat-card left-accent">
+        <article className="stat-card stat-card-total left-accent">
           <p className="section-label">TOTAL APPLICATIONS</p>
           <p className="stat-value">{stats.total}</p>
           <p className="muted">Active pipeline size</p>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card-interviews">
           <p className="section-label">INTERVIEWS SCHEDULED</p>
           <p className="stat-value">{stats.interviews}</p>
           <p className="muted">In progress this cycle</p>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card-offers">
           <p className="section-label">OFFERS RECEIVED</p>
           <p className="stat-value">{stats.offers}</p>
           <p className="muted">Positive outcomes</p>
         </article>
-        <article className="stat-card">
+        <article className="stat-card stat-card-ats">
           <p className="section-label">AVG ATS SCORE</p>
           <p className="stat-value">{stats.ats}</p>
           <p className="muted">Current health score</p>
@@ -215,9 +216,15 @@ function Dashboard() {
             <div className="interview-list">
               {upcomingInterviews.map((item) => (
                 <div key={item.id} className="interview-item">
-                  <p className="company">{item.company}</p>
-                  <p className="role">{item.role}</p>
-                  <p className="date">{new Date(item.interview_date).toLocaleDateString()}</p>
+                  <div className="date-box">
+                    <span>{new Date(item.interview_date).getDate()}</span>
+                    <small>{new Date(item.interview_date).toLocaleString('default', { month: 'short' })}</small>
+                  </div>
+                  <div>
+                    <p className="company">{item.company}</p>
+                    <p className="role">{item.role}</p>
+                    <p className="date">{new Date(item.interview_date).toLocaleDateString()}</p>
+                  </div>
                 </div>
               ))}
             </div>

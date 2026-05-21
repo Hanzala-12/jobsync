@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
 import MatchPanel from '../components/MatchPanel'
-import { applicationsAPI, jobsAPI, profileAPI, apiActions } from '../api/client'
+import { applicationsAPI, jobsAPI, profileAPI, apiActions, API_BASE_URL } from '../api/client'
 import searchStream from '../services/searchStream'
 import './Jobs.css'
 
@@ -25,6 +25,10 @@ const resolveExternalJobUrl = (job) => {
   const raw = String(job?.url || job?.apply_url || job?.external_id || '').trim()
   if (!raw) return ''
   if (/^https?:\/\//i.test(raw)) return raw
+  // Accept protocol-relative URLs
+  if (/^\/\//.test(raw)) return `${window.location.protocol}${raw}`
+  // If value looks like a domain/path without scheme, prepend https
+  if (raw.includes('.') && !raw.includes(':')) return `https://${raw}`
   return ''
 }
 
@@ -90,7 +94,7 @@ function Jobs() {
     setStreamingCount(0)
     setStreamElapsed(0)
     const selectedRemote = remoteOnly || location === 'Remote'
-    const API_BASE = import.meta.env.VITE_API_URL || '/api'
+    const API_BASE = API_BASE_URL
     const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
     const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}`
 
@@ -238,9 +242,9 @@ function Jobs() {
         <p className="subtitle">Search and save jobs with location-first filters.</p>
       </div>
 
-      <div className="search-card">
-        <div className="search-row">
-          <div style={{ position: 'relative', flex: 1 }}>
+      <div className="search-card panel-flat job-search-panel">
+        <div className="search-row job-search-row">
+          <div className="job-query-field" style={{ position: 'relative', flex: 1 }}>
             <input
               value={query}
               onChange={(event) => handleQueryChange(event.target.value)}

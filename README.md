@@ -4,6 +4,20 @@ JobSync Pro is a production-ready, showcase-quality AI-assisted job search and a
 
 ---
 
+## 🧰 Recent Hardening Updates
+
+The following production fixes have been applied to keep the backend and study module aligned with the live database:
+
+- Added an Alembic migration for the `universities` table timestamp fields: `created_at`, `updated_at`, and `last_scraped_at`.
+- Updated the `University` SQLAlchemy model to match the live schema with timezone-aware timestamp columns.
+- Rewrote the university filter endpoint in SQLAlchemy 2 style using `select()` and explicit `db.execute(...)` calls.
+- Added structured `503` handling in the university filter path so database issues return a clear API error instead of a raw crash.
+- Added a startup schema guard that warns if required university columns are missing.
+- Hardened `backend/job_indexer.py` to use `sqlalchemy.text()` with bound parameters and per-job exception logging.
+- Reworked `scripts/verify_production.py` so it can be run directly and performs real environment, database, and HTTP smoke checks.
+
+---
+
 ## ✨ Features & Capabilities
 
 ### 🔍 1. Automated Job Scouting & Prefetch Indexing (NEW)

@@ -13,6 +13,7 @@ reportlab==4.0.7
 # Web scraping for URL ingestion
 beautifulsoup4==4.12.2
 lxml==4.9.3
+pandas==2.2.2
 
 # Existing JobSync backend dependencies (for web API - optional)
 fastapi==0.110.0
@@ -27,3 +28,7 @@ pypdf==3.16.0
 docx2txt==0.8
 alembic>=1.13.0
 tenacity>=8.2.0
+chromadb>=0.4.0
+sentence-transformers>=2.2.2
+psycopg2-binary>=2.9.0
+supabase>=2.0.0

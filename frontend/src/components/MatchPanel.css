@@ -1,28 +1,32 @@
 ﻿.match-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(9, 9, 11, 0.42);
+  backdrop-filter: blur(10px);
   display: flex;
   justify-content: flex-end;
   z-index: 1000;
 }
 
 .match-panel {
-  width: 400px;
+  width: 420px;
   max-width: 100%;
-  background: #ffffff;
-  padding: 20px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 22px;
   overflow-y: auto;
   border-left: 1px solid var(--border);
-  animation: slide-in 0.2s ease;
+  box-shadow: -12px 0 40px rgba(24, 24, 27, 0.08);
+  animation: slide-in 0.22s ease;
 }
 
 @keyframes slide-in {
   from {
     transform: translateX(100%);
+    opacity: 0;
   }
   to {
     transform: translateX(0);
+    opacity: 1;
   }
 }
 
@@ -30,25 +34,28 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .match-header h3 {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .match-header button {
   border: 1px solid var(--border);
   background: #fff;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--text-secondary);
 }
 
 .match-job-title {
   margin-top: 12px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .match-company {
@@ -56,23 +63,27 @@
 }
 
 .score-circle {
-  margin: 16px auto;
-  width: 90px;
-  height: 90px;
-  border: 6px solid var(--accent);
+  margin: 18px auto;
+  width: 96px;
+  height: 96px;
+  border: 7px solid #111827;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 800;
+  color: var(--text-primary);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
 }
 
 .paragraph {
   border-left: 3px solid;
-  padding-left: 10px;
+  padding: 10px 0 10px 12px;
   margin-bottom: 10px;
   color: var(--text-secondary);
+  border-radius: 0 10px 10px 0;
+  background: rgba(244, 244, 245, 0.45);
 }
 
 .paragraph.green {
@@ -84,7 +95,7 @@
 }
 
 .paragraph.blue {
-  border-color: var(--accent);
+  border-color: #2563eb;
 }
 
 .chip-list {
@@ -95,9 +106,10 @@
 }
 
 .chip {
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 5px 9px;
+  border-radius: 999px;
   font-size: 12px;
+  font-weight: 600;
 }
 
 .chip-good {
@@ -111,10 +123,11 @@
 }
 
 .quick-win {
-  background: var(--accent-bg);
-  border-left: 3px solid var(--accent);
-  padding: 10px;
+  background: #eff6ff;
+  border-left: 3px solid #2563eb;
+  padding: 12px;
   margin-bottom: 12px;
+  border-radius: 0 10px 10px 0;
 }
 
 .full-width {

@@ -1,41 +1,73 @@
-﻿* {
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
 :root {
-  --bg: #ffffff;
-  --bg-subtle: #fafafa;
-  --bg-hover: #f5f5f5;
-  --border: #e5e5e5;
-  --border-strong: #cccccc;
-  --text-primary: #111111;
-  --text-secondary: #555555;
-  --text-muted: #999999;
-  --accent: #2563eb;
-  --accent-bg: #eff6ff;
-  --success: #16a34a;
+  --bg: #fafafa;
+  --bg-surface: rgba(255, 255, 255, 0.88);
+  --bg-subtle: #f4f4f5;
+  --bg-hover: #ececf0;
+  --border: rgba(228, 228, 231, 0.92);
+  --border-strong: #d4d4d8;
+  --text-primary: #09090b;
+  --text-secondary: #3f3f46;
+  --text-muted: #71717a;
+  --accent: #18181b;
+  --accent-bg: #f4f4f5;
+  --success: #15803d;
   --success-bg: #f0fdf4;
-  --warning: #d97706;
+  --warning: #b45309;
   --warning-bg: #fffbeb;
-  --danger: #dc2626;
-  --danger-bg: #fff1f2;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
   --purple: #7c3aed;
   --purple-bg: #faf5ff;
+  --shadow: 0 18px 50px rgba(24, 24, 27, 0.08);
+  --shadow-soft: 0 8px 24px rgba(24, 24, 27, 0.06);
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+  --text-4xl: 36px;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.06em;
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg);
+  min-height: 100vh;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(24, 24, 27, 0.05), transparent 30%),
+    radial-gradient(circle at top right, rgba(161, 161, 170, 0.12), transparent 28%),
+    linear-gradient(180deg, #fafafa 0%, #f5f5f2 100%);
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 #root {
   min-height: 100vh;
+}
+
+::selection {
+  background: rgba(24, 24, 27, 0.08);
 }
 
 ::-webkit-scrollbar {
@@ -44,16 +76,20 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-subtle);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 3px;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
 }
 
 a {
-  color: var(--accent);
+  color: inherit;
   text-decoration: none;
 }
 
@@ -68,70 +104,264 @@ button {
 input,
 textarea,
 select {
-  color: var(--text-primary);
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #09090b;
+  padding: 10px 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #a1a1aa;
 }
 
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--accent) !important;
+  border-color: #a1a1aa !important;
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.06);
 }
 
 .page-header {
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .page-header h1 {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
 .page-header .subtitle,
 .page-header p {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 14px;
   color: var(--text-muted);
+  font-weight: 500;
 }
 
 .section-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.12em;
+}
+
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(10px);
+}
+
+.panel-flat {
+  background: #ffffff;
+  border: 1px solid rgba(228, 228, 231, 0.8);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.panel-raised {
+  background: #ffffff;
+  border: 1px solid rgba(228, 228, 231, 0.8);
+  border-radius: 18px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
   font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
 }
 
 .status-Saved {
   background: var(--bg-subtle);
   color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 .status-Applied {
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
 }
 
 .status-Interviewing {
   background: var(--purple-bg);
   color: var(--purple);
+  border-color: #e9d5ff;
 }
 
 .status-Offered {
   background: var(--success-bg);
   color: var(--success);
+  border-color: #bbf7d0;
 }
 
 .status-Rejected {
   background: var(--danger-bg);
   color: var(--danger);
+  border-color: #fecaca;
+}
+
+.grade-a { color: var(--success); }
+.grade-b { color: #2563eb; }
+.grade-c { color: var(--warning); }
+.grade-d { color: #ea580c; }
+.grade-f { color: var(--danger); }
+
+.muted {
+  color: var(--text-muted);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+.dashboard-page,
+.jobs-page,
+.profile-page,
+.applications-page,
+.resume-page,
+.cover-page,
+.interview-page,
+.skill-gap-page,
+.scout-page,
+.kanban-page,
+.mock-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.jobs-page .search-card,
+.profile-page .profile-form,
+.applications-page .form-box {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+.jobs-page .search-card,
+.profile-page .profile-form {
+  padding: 22px;
+}
+
+.jobs-page .job-card,
+.profile-page .profile-item,
+.applications-page .apps-table,
+.jobs-page .autocomplete-dropdown,
+.jobs-page .salary-popover,
+.jobs-page .match-modal,
+.jobs-page .match-modal-overlay,
+.jobs-page .match-panel {
+  border-color: var(--border);
+}
+
+.jobs-page .job-card,
+.profile-page .profile-item {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+.jobs-page .job-card {
+  padding: 18px;
+}
+
+.jobs-page .source-pill,
+.jobs-page .demand-badge {
+  background: #ffffff;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.jobs-page .autocomplete-dropdown {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.jobs-page .autocomplete-item:hover {
+  background: rgba(244, 244, 245, 0.95);
+}
+
+.profile-page .profile-item {
+  padding: 14px 16px;
+}
+
+.profile-page .field-input,
+.jobs-page input,
+.jobs-page select,
+.applications-page input,
+.applications-page select,
+.profile-page input,
+.profile-page textarea,
+.profile-page select,
+.resume-page input,
+.resume-page textarea,
+.resume-page select,
+.cover-page input,
+.cover-page textarea,
+.cover-page select,
+.interview-page input,
+.interview-page textarea,
+.interview-page select,
+.skill-gap-page input,
+.skill-gap-page textarea,
+.skill-gap-page select,
+.scout-page input,
+.scout-page textarea,
+.scout-page select,
+.kanban-page input,
+.kanban-page textarea,
+.kanban-page select,
+.mock-page input,
+.mock-page textarea,
+.mock-page select {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.applications-page .apps-table {
+  background: rgba(255, 255, 255, 0.92);
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+.applications-page .apps-table th,
+.applications-page .apps-table td {
+  border-bottom-color: var(--border);
+}
+
+.applications-page .action-link.edit {
+  color: #2563eb;
+}
+
+.applications-page .action-link.delete {
+  color: var(--danger);
+}
+
+.profile-page .page-header,
+.applications-page .page-header,
+.jobs-page .page-header,
+.dashboard-page .page-header {
+  margin-bottom: 4px;
 }

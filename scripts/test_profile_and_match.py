@@ -12,7 +12,7 @@ def create_profile():
         'years_experience': '3',
         'interests': 'web development'
     }
-    r = requests.post(f"{BASE}/api/profile", data=data, files=files, timeout=120)
+    r = requests.post(f"{BASE}/profile", data=data, files=files, timeout=120)
     print('create_profile', r.status_code, r.text[:200])
     time.sleep(1)
 
@@ -31,7 +31,7 @@ def test_match_first_job():
     job_id = job.get('id') or job.get('external_id') or job.get('url')
     # If job has numeric id use match route
     if isinstance(job_id, int):
-        r2 = requests.post(f"{BASE}/api/match/{job_id}", timeout=120)
+        r2 = requests.post(f"{BASE}/match/{job_id}", timeout=120)
         print('match', r2.status_code, r2.text[:400])
     else:
         print('job id not numeric, skip match')

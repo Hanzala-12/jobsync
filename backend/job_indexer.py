@@ -7,6 +7,7 @@ import os
 import time
 import logging
 from datetime import datetime
+from sqlalchemy import text
 from backend.services import job_apis
 from backend.database import engine
 from core.database import init_db
@@ -29,13 +30,20 @@ def _upsert_prefetched(job: dict):
     fetched_at = datetime.utcnow()
 
     with engine.begin() as conn:
-        try:
-            conn.execute(
-                "INSERT OR REPLACE INTO prefetched_jobs (job_id, title, company, description, source, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (job_id, title, company, description, source, fetched_at.strftime("%Y-%m-%d %H:%M:%S")),
-            )
-        except Exception as exc:
-            _logger.warning("Failed to upsert prefetched job: %s", exc)
+        conn.execute(
+            text(
+                "INSERT OR REPLACE INTO prefetched_jobs (job_id, title, company, description, source, fetched_at) "
+                "VALUES (:job_id, :title, :company, :description, :source, :fetched_at)"
+            ),
+            {
+                "job_id": job_id,
+                "title": title,
+                "company": company,
+                "description": description,
+                "source": source,
+                "fetched_at": fetched_at.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
 
 
 def fetch_and_store():
@@ -52,7 +60,11 @@ def fetch_and_store():
 
         _logger.info("Indexer found %d jobs for query %s", len(jobs), q)
         for job in jobs:
-            _upsert_prefetched(job)
+            try:
+                _upsert_prefetched(job)
+            except Exception as exc:
+                job_id = job.get("external_id") or job.get("url") or f"{job.get('title')}-{job.get('company')}"
+                _logger.exception("Failed to index job %s: %s", job_id, exc)
 
 
 def main():

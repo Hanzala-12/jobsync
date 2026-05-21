@@ -1,27 +1,30 @@
 .jobs-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .search-card {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px 24px;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--shadow-soft);
 }
 
 .search-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  align-items: center;
 }
 
-.search-row input {
-  flex: 1;
-  height: 40px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0 12px;
+.job-query-field input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  padding: 0 14px;
+  background: #f4f4f5;
 }
 
 .location-row-wrap {
@@ -48,9 +51,9 @@
 }
 
 .loc-btn.active {
-  color: #111;
+  color: #111111;
   font-weight: 600;
-  border-bottom-color: #111;
+  border-bottom-color: #111111;
 }
 
 .remote-toggle {
@@ -90,24 +93,34 @@
 .jobs-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .job-card {
   position: relative;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.job-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
 .card-top-meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
 
 .company-meta {
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0.01em;
   color: var(--text-muted);
 }
 
@@ -116,25 +129,27 @@
   padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  color: var(--text-muted);
+  color: #71717a;
+  background: #ffffff;
 }
 
 .job-card h3 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
 .job-location {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: #71717a;
 }
 
 .job-description {
   margin-top: 8px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: #3f3f46;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -142,7 +157,7 @@
 }
 
 .divider {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid #f4f4f5;
   margin: 12px 0;
 }
 
@@ -157,21 +172,21 @@
 .job-actions button {
   background: none;
   border: none;
-  color: var(--accent);
+  color: #2563eb;
   cursor: pointer;
   font-size: 13px;
 }
 
 .salary-link {
-  color: var(--text-muted) !important;
+  color: #71717a !important;
 }
 
 .salary-popover {
   margin-top: 10px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-subtle);
+  border-radius: 12px;
+  background: #fafafa;
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -184,6 +199,7 @@
   color: var(--text-secondary);
   font-size: 11px;
   text-transform: capitalize;
+  background: #ffffff;
 }
 
 .pagination {
@@ -214,10 +230,10 @@
   top: 100%;
   left: 0;
   right: 0;
-  background: #fff;
+  background: #ffffff;
   border: 1px solid var(--border);
   border-top: none;
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 12px 12px;
   max-height: 250px;
   overflow-y: auto;
   z-index: 10;
@@ -228,12 +244,12 @@
   padding: 10px 12px;
   cursor: pointer;
   font-size: 14px;
-  color: var(--text);
+  color: var(--text-primary);
   transition: background-color 0.15s;
 }
 
 .autocomplete-item:hover {
-  background-color: var(--bg-subtle);
+  background-color: #f4f4f5;
 }
 
 .autocomplete-item:first-child {
@@ -241,10 +257,9 @@
 }
 
 .autocomplete-item:last-child {
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 12px 12px;
 }
 
-/* Loading spinner and progress bar */
 .spinner {
   width: 18px;
   height: 18px;
@@ -263,7 +278,7 @@
 .progress-wrap {
   width: 100%;
   height: 8px;
-  background: var(--bg-subtle);
+  background: #f4f4f5;
   border-radius: 999px;
   overflow: hidden;
   margin-top: 8px;
@@ -272,7 +287,7 @@
 .progress-bar {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--accent), #6dd3ff);
+  background: linear-gradient(90deg, #111827, #2563eb);
   transition: width 0.25s linear;
 }
 
@@ -287,12 +302,11 @@
   to { background-position: -200% 0; }
 }
 
-/* Match modal styles */
 .match-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(8px);
+  background: rgba(9, 9, 11, 0.42);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -309,7 +323,7 @@
 .match-modal {
   background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 16px;
+  border-radius: 18px;
   max-width: 520px;
   width: 100%;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -339,7 +353,7 @@
 
 .match-progress {
   height: 10px;
-  background: #f1f5f9;
+  background: #f4f4f5;
   border-radius: 999px;
   overflow: hidden;
   position: relative;
@@ -347,7 +361,7 @@
 
 .match-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #3b82f6);
+  background: linear-gradient(90deg, #111827, #2563eb);
   border-radius: 999px;
   transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -414,22 +428,16 @@
   background: #1e293b !important;
 }
 
-/* Spinner refinement inside modal */
 .match-loading-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 0;
+  min-height: 220px;
   gap: 16px;
+  color: var(--text-secondary);
 }
 
-.match-loading-container p {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-}
-
-@media (max-width: 600px) {
-  .match-modal { max-width: 92%; padding: 16px; }
+.job-search-panel {
+  gap: 16px;
 }

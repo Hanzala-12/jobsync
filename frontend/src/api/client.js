@@ -1,9 +1,25 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+function resolveApiBaseUrl() {
+  const configured = String(import.meta.env.VITE_API_URL || '').trim()
+  if (configured) {
+    return configured.replace(/\/$/, '')
+  }
+
+  return ''
+}
+
+export const API_BASE_URL = resolveApiBaseUrl()
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+})
+
+apiClient.interceptors.request.use((config) => {
+  if (!API_BASE_URL && typeof config.url === 'string' && config.url.startsWith('/') && !config.url.startsWith('/api/')) {
+    config.url = `/api${config.url}`
+  }
+  return config
 })
 
 export function getApiErrorMessage(error) {
@@ -111,6 +127,23 @@ export const applicationsAPI = {
   update: (appId, data) => apiClient.patch(`/applications/${appId}`, data),
   delete: (appId) => apiClient.delete(`/applications/${appId}`),
   healthScore: () => apiClient.get('/applications/health-score'),
+}
+
+export const studentAPI = {
+  createProfile: (data) => apiClient.post('/student/profile', data),
+  getProfile: (id) => apiClient.get(`/student/profile/${id}`),
+  updateProfile: (id, data) => apiClient.patch(`/student/profile/${id}`, data),
+  getRecommendations: (profileId, limit = 20, filters = {}) =>
+    apiClient.post('/student/match/recommend', { student_profile_id: profileId, limit, ...filters }),
+  getProgramMatch: (profileId, programId) =>
+    apiClient.get(`/student/match/program/${programId}`, { params: { student_profile_id: profileId } }),
+  getUniversitiesFilter: (params) => apiClient.get('/student/universities/filter', { params }),
+  getUniversityDetail: (universityId) => apiClient.get(`/student/university/${universityId}/detail`),
+  saveUniversity: (studentId, programId) => apiClient.post('/student/save', { student_id: studentId, program_id: programId }),
+  getSavedUniversities: (studentId) => apiClient.get(`/student/saved/${studentId}`),
+  applyProgram: (studentId, programId, notes = '') => apiClient.post('/student/apply', { student_id: studentId, program_id: programId, notes }),
+  updateApplication: (applicationId, payload) => apiClient.put(`/student/applications/${applicationId}`, payload),
+  getApplications: (studentId) => apiClient.get(`/student/applications/${studentId}`),
 }
 
 export const dailyScoutAPI = {

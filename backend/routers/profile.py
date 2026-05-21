@@ -11,7 +11,19 @@ from sqlalchemy import inspect
 
 from backend.database import get_db, engine
 from backend.models import Job, UserPreference, UserProfile
-from ingest import chunk_text
+try:
+    from ingest import chunk_text
+except Exception:
+    def chunk_text(text: str, chunk_size: int = 800, overlap: int = 200):
+        if not text:
+            return []
+        step = max(1, chunk_size - overlap)
+        chunks = []
+        for start in range(0, len(text), step):
+            chunk = text[start : start + chunk_size].strip()
+            if chunk:
+                chunks.append(chunk)
+        return chunks
 
 
 MAX_PROFILE_UPLOAD_BYTES = max(1, int(os.getenv("MAX_PROFILE_UPLOAD_BYTES", str(5 * 1024 * 1024))))

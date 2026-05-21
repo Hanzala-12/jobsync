@@ -1,0 +1,1 @@
+"""Pakistan job scraper package."""

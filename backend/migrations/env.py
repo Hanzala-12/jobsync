@@ -11,7 +11,7 @@ from sqlalchemy import pool
 from alembic import context
 from backend.database import Base, DATABASE_URL
 # Import all models to register them on Base.metadata
-from backend.models import UserProfile, Job, Application, ResumeVersion, PrefetchedJob
+from backend.models import UserProfile, Job, Application, ResumeVersion, PrefetchedJob, University, Program, StudentProfile, UniversityMatchCache, StudentProgramMatch, SavedProgram, StudyApplication
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -75,7 +75,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
         )
 
         with context.begin_transaction():

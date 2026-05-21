@@ -9,9 +9,9 @@ import csv
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from groq import Groq
 
 from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
+from core.llm_provider import LLMProvider
 
 # Try to import PDF support (optional)
 try:
@@ -46,31 +46,12 @@ KEYWORDS = [
     "html", "css", "flask", "streamlit", "resume", "interview"
 ]
 
-# Initialize LLM client (supports both Groq and OpenRouter)
-try:
-    api_key = os.getenv("GROQ_API_KEY")
-    if api_key and api_key.startswith("sk-or-v1-"):
-        # OpenRouter API key detected
-        from openai import OpenAI
-        groq_client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key
-        )
-        LLM_MODEL = "meta-llama/llama-3.1-8b-instruct"
-        LLM_AVAILABLE = True
-        print("Using OpenRouter API with Llama 3")
-    elif api_key and api_key.startswith("gsk_"):
-        # Groq API key
-        groq_client = Groq(api_key=api_key)
-        LLM_MODEL = "llama3-8b-8192"
-        LLM_AVAILABLE = True
-        print("Using Groq API with Llama 3")
-    else:
-        LLM_AVAILABLE = False
-        print("Warning: No valid API key. Using keyword-based analysis only.")
-except Exception as e:
-    LLM_AVAILABLE = False
-    print(f"Warning: LLM API not available ({e}). Using keyword-based analysis only.")
+_llm_provider = LLMProvider()
+LLM_AVAILABLE = bool(_llm_provider.backends)
+if LLM_AVAILABLE:
+    print(f"Using LLM provider: {_llm_provider.backends[0].provider}")
+else:
+    print("Warning: No valid LLM API key. Using keyword-based analysis only.")
 
 
 # ============================================================================
@@ -145,16 +126,8 @@ def ask_llm(prompt, system_prompt="You are a helpful career AI assistant.", temp
         return None
     
     try:
-        completion = groq_client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=temperature,
-            max_tokens=1024,
-        )
-        return completion.choices[0].message.content
+        response = _llm_provider.ask(system_prompt, prompt, temperature=temperature)
+        return None if response.startswith("AI error:") else response
     except Exception as e:
         print(f"LLM Error: {e}")
         return None

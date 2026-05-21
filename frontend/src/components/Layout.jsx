@@ -1,8 +1,9 @@
-﻿import { Link, useLocation } from 'react-router-dom'
+﻿import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import './Layout.css'
 import searchStream from '../services/searchStream'
 
-const navGroups = [
+const jobNavGroups = [
   {
     label: 'MAIN',
     items: [
@@ -36,27 +37,59 @@ const navGroups = [
   },
 ]
 
+const studyNavGroups = [
+  {
+    label: 'STUDY',
+    items: [
+      { path: '/student/dashboard', label: 'University Dashboard' },
+      { path: '/student/profile', label: 'Find Universities' },
+      { path: '/student/matches', label: 'My Matches' },
+      { path: '/student/applications', label: 'My Applications' },
+    ],
+  },
+]
+
 const Layout = ({ children }) => {
   const location = useLocation()
   const mainClass = location.pathname === '/kanban' ? 'app-main app-main-full' : 'app-main'
+  const [studyMode, setStudyMode] = useState(localStorage.getItem('study_mode') === 'true')
+  const [hasStudentProfile, setHasStudentProfile] = useState(Boolean(localStorage.getItem('student_profile_id')))
+
+  useEffect(() => {
+    const syncState = () => {
+      setStudyMode(localStorage.getItem('study_mode') === 'true')
+      setHasStudentProfile(Boolean(localStorage.getItem('student_profile_id')))
+    }
+    window.addEventListener('storage', syncState)
+    syncState()
+    return () => window.removeEventListener('storage', syncState)
+  }, [])
+
+  const navGroups = studyMode && hasStudentProfile ? studyNavGroups : jobNavGroups
 
   return (
     <div className="layout-shell">
       <aside className="sidebar">
         <div className="logo">
-          <span>JobSync</span>
+          <div className="brand-lockup">
+            <div className="brand-mark" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
+            </div>
+            <span>JobSync</span>
+          </div>
           <button
-            className="stop-search-btn"
+            type="button"
+            className="mode-toggle"
             onClick={() => {
-              try {
-                if (window.confirm('Stop background search?')) {
-                  searchStream.stop()
-                  alert('Search stopped')
-                }
-              } catch (e) {}
+              const next = !studyMode
+              localStorage.setItem('study_mode', next ? 'true' : 'false')
+              setStudyMode(next)
             }}
           >
-            Stop Search
+            <span>{studyMode ? 'Study Mode' : 'Job Mode'}</span>
+            <strong>{studyMode ? 'Switch to Jobs' : 'Switch to Study'}</strong>
           </button>
         </div>
         <nav>
@@ -66,16 +99,34 @@ const Layout = ({ children }) => {
               {group.items.map((item) => {
                 const active = location.pathname === item.path
                 return (
-                  <Link key={item.path} to={item.path} className={`nav-link ${active ? 'active' : ''}`}>
-                    {item.label}
-                  </Link>
+                      <div key={item.path} className={`nav-link-wrap ${active ? 'active' : ''}`}>
+                        {active && <span className="nav-active-bar" aria-hidden="true" />}
+                        <Link to={item.path} className={`nav-link ${active ? 'active' : ''}`}>
+                          {item.label}
+                        </Link>
+                      </div>
                 )
               })}
             </div>
           ))}
+
+          <div className="sidebar-footer">
+            <button
+              className="logout-btn"
+              onClick={() => {
+                localStorage.removeItem('auth')
+                localStorage.removeItem('student_profile_id')
+                localStorage.removeItem('study_mode')
+                window.location.reload()
+              }}
+            >
+              <span aria-hidden="true">→</span>
+              Log out
+            </button>
+          </div>
         </nav>
       </aside>
-      <main className={mainClass}>{children}</main>
+      <main className={`${mainClass} page-enter`}>{children}</main>
     </div>
   )
 }

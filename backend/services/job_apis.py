@@ -156,7 +156,22 @@ def _normalize_job(item: Dict, source: str) -> Dict:
     if isinstance(location, dict):
         location = location.get("display_name") or location.get("area") or ""
 
-    external_id = item.get("id") or item.get("job_id") or item.get("slug")
+    external_id = item.get("external_id") or item.get("id") or item.get("job_id") or item.get("slug")
+    normalized_url = str(
+        item.get("redirect_url")
+        or item.get("url")
+        or item.get("apply_url")
+        or item.get("job_url")
+        or item.get("job_apply_url")
+        or item.get("application_url")
+        or item.get("link")
+        or ""
+    ).strip()
+
+    if not normalized_url:
+        external_url = str(external_id or "").strip()
+        if external_url.startswith("http://") or external_url.startswith("https://"):
+            normalized_url = external_url
 
     return {
         "external_id": str(external_id or f"{source}:{item.get('title', '')}:{company}"),
@@ -166,14 +181,8 @@ def _normalize_job(item: Dict, source: str) -> Dict:
         "description": clean_text(
             str(item.get("description") or item.get("job_description") or item.get("snippet") or "")
         ),
-        "url": str(
-            item.get("redirect_url")
-            or item.get("url")
-            or item.get("job_url")
-            or item.get("job_apply_url")
-            or item.get("application_url")
-            or ""
-        ),
+        "url": normalized_url,
+        "apply_url": normalized_url,
         "source": source,
         "salary": _build_salary(item),
         "posted_date": str(
@@ -370,13 +379,48 @@ def fetch_rozee_pakistan(query: str, city: Optional[str] = None, max_pages: int 
     try:
         from scrapers.rozee_scraper import scrape_query
     except Exception:
+        _logger.warning("Rozee scraper import failed")
         return []
-
     raw_jobs = []
+    # quick availability check: if Rozee search page is blocked (Cloudflare), prefer indexed/Bing fallbacks
+    try:
+        import requests as _requests
+        city_slug = (city or "pakistan").strip().lower().replace(" ", "-")
+        query_slug = (query or "software engineer").strip().lower().replace(" ", "-")
+        check_url = f"https://www.rozee.pk/search/{query_slug}-jobs-in-{city_slug}"
+        _resp = _requests.get(check_url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        if _resp.status_code != 200 or ("Cloudflare" in (_resp.text or "") and _resp.status_code == 403):
+            _logger.warning("Rozee appears blocked from this host: status=%s", _resp.status_code)
+            # try indexed and bing fallbacks immediately
+            try:
+                indexed_jobs = fetch_indexed_pakistan(query=query, city=city or "pakistan", max_urls=10)
+            except Exception:
+                indexed_jobs = []
+            try:
+                bing_jobs = fetch_bing_pakistan(query=query, city=city, max_pages=1)
+            except Exception:
+                bing_jobs = []
+
+            rozee_from_indexed = []
+            for item in (indexed_jobs + bing_jobs):
+                url = str(item.get("url") or "")
+                if "rozee.pk" in url.lower():
+                    item["source"] = "rozee"
+                    rozee_from_indexed.append(_normalize_job(item, "rozee"))
+
+            if rozee_from_indexed:
+                return _filter_city(rozee_from_indexed, city)
+            # otherwise continue to attempt normal scraping
+    except Exception:
+        pass
     for variant in _query_variants(query):
         try:
-            raw_jobs.extend(scrape_query(keyword=variant, city=city.lower() if city else None, max_pages=max_pages))
-        except Exception:
+            _logger.info("Fetching Rozee variant '%s' (city=%s, pages=%s)", variant, city, max_pages)
+            fetched = scrape_query(keyword=variant, city=city.lower() if city else None, max_pages=max_pages)
+            _logger.info("Rozee fetched %d items for variant '%s'", len(fetched or []), variant)
+            raw_jobs.extend(fetched or [])
+        except Exception as exc:
+            _logger.exception("Rozee fetch failed for variant '%s': %s", variant, exc)
             continue
 
     jobs = []
@@ -385,7 +429,74 @@ def fetch_rozee_pakistan(query: str, city: Optional[str] = None, max_pages: int 
         item["source"] = "rozee"
         item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
         jobs.append(_normalize_job(item, "rozee"))
-    return _filter_city([job for job in jobs if _matches_remote_title(job, query)], city)
+
+    filtered = [job for job in jobs if _matches_remote_title(job, query)]
+
+    # Fallback: if direct Rozee scraping returns nothing in hosted environments,
+    # pull Rozee URLs from indexed web results and normalize them as Rozee jobs.
+    if not filtered:
+        try:
+            from scrapers.indexed_jobs_scraper import scrape_query as indexed_scrape_query
+
+            fallback_city = city.lower() if city else "lahore"
+            indexed_jobs = indexed_scrape_query(keyword=query, city=fallback_city, max_urls=8)
+            fallback = []
+            for raw in indexed_jobs:
+                item = dict(raw)
+                url = str(item.get("apply_url") or item.get("url") or "")
+                if "rozee.pk" not in url.lower():
+                    continue
+                item["source"] = "rozee"
+                item["location"] = item.get("location") or item.get("city") or city or "Pakistan"
+                fallback.append(_normalize_job(item, "rozee"))
+
+            if fallback:
+                filtered = [job for job in fallback if _matches_remote_title(job, query)] or fallback
+                _logger.info("Rozee fallback via indexed results produced %d jobs", len(filtered))
+        except Exception as exc:
+            _logger.warning("Rozee indexed fallback failed: %s", exc)
+
+    if not filtered:
+        city_slug = (city or "pakistan").strip().lower().replace(" ", "-")
+        query_slug = (query or "software engineer").strip().lower().replace(" ", "-")
+        rozee_search_url = f"https://www.rozee.pk/search/{query_slug}-jobs-in-{city_slug}"
+        filtered = [
+            {
+                "external_id": rozee_search_url,
+                "title": f"{query.title()} jobs on Rozee",
+                "company": "Rozee.pk",
+                "location": city or "Pakistan",
+                "description": "Open Rozee search results for this query.",
+                "url": rozee_search_url,
+                "apply_url": rozee_search_url,
+                "source": "rozee",
+                "salary": "",
+                "posted_date": "",
+            }
+        ]
+
+    _logger.info("Rozee total normalized %d, filtered %d", len(jobs), len(filtered))
+    # If Rozee appears to be blocked (only placeholder or very few results),
+    # try extracting Rozee links from Bing search results as a stronger fallback.
+    try:
+        if len(filtered) <= 1:
+            try:
+                bing_jobs = fetch_bing_pakistan(query=query, city=city, max_pages=1)
+                rozee_from_bing = []
+                for item in bing_jobs:
+                    url = str(item.get("url") or "")
+                    if "rozee.pk" in url.lower():
+                        item["source"] = "rozee"
+                        rozee_from_bing.append(_normalize_job(item, "rozee"))
+                if rozee_from_bing:
+                    filtered = rozee_from_bing
+                    _logger.info("Rozee recovered via Bing fallback %d jobs", len(filtered))
+            except Exception as exc:
+                _logger.warning("Rozee Bing fallback failed: %s", exc)
+    except Exception:
+        pass
+
+    return _filter_city(filtered, city)
 
 
 def fetch_mustakbil_pakistan(query: str, city: Optional[str] = None, max_pages: int = 1) -> List[Dict]:
@@ -495,7 +606,7 @@ def fetch_linkedin_indexed(query: str, city: Optional[str] = None, max_jobs: int
 
 def fetch_company_careers(query: str, company_limit: int = 6) -> List[Dict]:
     try:
-        from config.pakistan_jobs_config import PAKISTANI_COMPANIES
+        from backend.config.pakistan_jobs_config import PAKISTANI_COMPANIES
         from scrapers.careers_page_scraper import scrape_company
     except Exception:
         return []
@@ -552,6 +663,7 @@ def search_jobs(
     remote_only: bool = False,
     country_code: str = "pk",
     pakistan_only: bool = False,
+    diagnostics: Optional[Dict] = None,
 ) -> List[Dict]:
     query = _normalize_query(query)
     location_key = (location or "").strip().lower()
@@ -576,18 +688,41 @@ def search_jobs(
             _logger.warning("search source failed: %s (%s)", source_name, exc)
         return []
 
+    # diagnostics helper
+    def _record(source_name: str, count: int = 0, error: Optional[str] = None, elapsed: Optional[float] = None):
+        if diagnostics is None:
+            return
+        try:
+            diagnostics.setdefault("sources", {})
+            diagnostics["query"] = query
+            diagnostics["location"] = location
+            diagnostics["city"] = city
+            diagnostics["sources"][source_name] = {"count": int(count)}
+            if error:
+                diagnostics["sources"][source_name]["error"] = str(error)
+            if elapsed is not None:
+                diagnostics["sources"][source_name]["elapsed"] = float(elapsed)
+        except Exception:
+            pass
+
     # Remote-only mode: skip Adzuna entirely
     if is_remote_mode:
         remotive_jobs: List[Dict] = []
         jobicy_jobs: List[Dict] = []
         try:
+            start = time.time()
             remotive_jobs = [job for job in fetch_remotive(query=query, limit=20) if _matches_remote_title(job, query)]
+            _record("remotive", len(remotive_jobs), None, time.time() - start)
         except Exception:
+            _record("remotive", 0, "failed")
             remotive_jobs = []
 
         try:
+            start = time.time()
             jobicy_jobs = [job for job in fetch_jobicy(query=query, count=20) if _matches_remote_title(job, query)]
+            _record("jobicy", len(jobicy_jobs), None, time.time() - start)
         except Exception:
+            _record("jobicy", 0, "failed")
             jobicy_jobs = []
 
         return dedupe_jobs(_clean_jobs(_mark_remote(remotive_jobs + jobicy_jobs)))
@@ -603,12 +738,16 @@ def search_jobs(
     if _is_pakistan_city(location, city):
         try:
             adzuna_city_jobs = fetch_adzuna(query=query, country_code="pk", where=resolved_where or location, results_per_page=20)
+            _record("adzuna_city", len(adzuna_city_jobs))
         except Exception:
+            _record("adzuna_city", 0, "failed")
             adzuna_city_jobs = []
 
         try:
             adzuna_broad_jobs = fetch_adzuna(query=query, country_code="pk", where="", results_per_page=20)
+            _record("adzuna_broad", len(adzuna_broad_jobs))
         except Exception:
+            _record("adzuna_broad", 0, "failed")
             adzuna_broad_jobs = []
 
         # Fetch from all sources simultaneously for max results
@@ -644,6 +783,7 @@ def search_jobs(
                     res = fut.result(timeout=0)
                 except Exception as exc:
                     _logger.warning("search source failed: %s (%s)", name, exc)
+                    _record(name, 0, str(exc))
                     res = []
                 if name == "rozee":
                     rozee_jobs = res
@@ -655,9 +795,18 @@ def search_jobs(
                     linkedin_jobs = res
                 elif name == "careers":
                     careers_jobs = res
+                # record successful counts
+                try:
+                    _record(name, len(res or []))
+                except Exception:
+                    pass
 
             for fut in pending:
                 _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, futures.get(fut, "unknown"))
+                try:
+                    _record(futures.get(fut, "unknown"), 0, "timed_out")
+                except Exception:
+                    pass
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
 
@@ -677,9 +826,11 @@ def search_jobs(
         if len(result) < 5:
             try:
                 indexed_jobs = fetch_indexed_pakistan(query=query, city=resolved_where or location, max_urls=6)
+                _record("indexed", len(indexed_jobs))
                 combined_adzuna = dedupe_jobs(combined_adzuna + indexed_jobs)
                 result = dedupe_jobs(_clean_jobs(combined_adzuna))
             except Exception:
+                _record("indexed", 0, "failed")
                 pass
         try:
             _search_cache[cache_key] = (time.time(), result)
@@ -691,7 +842,9 @@ def search_jobs(
     adzuna_jobs: List[Dict] = []
     try:
         adzuna_jobs = fetch_adzuna(query=query, country_code=country, where=resolved_where, results_per_page=20)
+        _record("adzuna", len(adzuna_jobs))
     except Exception:
+        _record("adzuna", 0, "failed")
         adzuna_jobs = []
 
     combined = list(adzuna_jobs)
@@ -729,6 +882,7 @@ def search_jobs(
                     res = fut.result(timeout=0)
                 except Exception as exc:
                     _logger.warning("search source failed: %s (%s)", name, exc)
+                    _record(name, 0, str(exc))
                     res = []
                 if name == "rozee":
                     rozee_jobs = res
@@ -742,9 +896,17 @@ def search_jobs(
                     linkedin_jobs = res
                 elif name == "careers":
                     careers_jobs = res
+                try:
+                    _record(name, len(res or []))
+                except Exception:
+                    pass
 
             for fut in pending:
                 _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, futures.get(fut, "unknown"))
+                try:
+                    _record(futures.get(fut, "unknown"), 0, "timed_out")
+                except Exception:
+                    pass
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
 

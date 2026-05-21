@@ -23,6 +23,12 @@ from scrapers import (
 logger = logging.getLogger(__name__)
 
 
+def _refresh_match_cache(db, program_limit: int = 50):
+    from backend.services.university_match_service import refresh_match_cache
+
+    return refresh_match_cache(db, program_limit=program_limit)
+
+
 @dataclass
 class ScheduledTask:
     name: str
@@ -55,6 +61,7 @@ SCHEDULED_TASKS: Dict[str, ScheduledTask] = {
     "indexed_jobs": ScheduledTask("indexed_jobs", 8, lambda db: indexed_jobs_scraper.run(db)),
     "job_checker": ScheduledTask("job_checker", 1, lambda db: check_oldest_jobs(db, limit=50), "checks 50 oldest jobs"),
     "dedup_cleanup": ScheduledTask("dedup_cleanup", 24, lambda db: daily_dedup_cleanup(db)),
+    "university_match_refresh": ScheduledTask("university_match_refresh", 24, lambda db: _refresh_match_cache(db, program_limit=50), "refreshes university-program match cache"),
 }
 
 _thread: Optional[threading.Thread] = None

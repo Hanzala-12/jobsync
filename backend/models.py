@@ -1,8 +1,9 @@
 from datetime import datetime
 import enum
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, Index
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 
 from backend.database import Base
 
@@ -78,6 +79,11 @@ class Application(Base):
     contact_email = Column(String, nullable=True)
 
 
+class TimestampMixin:
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class ResumeVersion(Base):
     __tablename__ = "resume_versions"
 
@@ -99,3 +105,160 @@ class PrefetchedJob(Base):
     description = Column(Text, nullable=True)
     source = Column(String, nullable=True)
     fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+Index("ix_prefetched_fetched_at", PrefetchedJob.fetched_at)
+
+
+class University(Base):
+    __tablename__ = "universities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    country = Column(String, nullable=False, index=True)
+    city = Column(String, nullable=False, index=True)
+    website = Column(String, nullable=True)
+    ranking = Column(String, nullable=True, index=True)
+    ranking_global = Column(Integer, nullable=True, index=True)
+    logo_url = Column(String, nullable=True)
+    acceptance_rate = Column(Float, nullable=True)
+    accreditation = Column(String, nullable=True)
+    student_population = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    last_scraped_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    programs = relationship("Program", back_populates="university", cascade="all, delete-orphan")
+    scholarships = relationship("Scholarship", back_populates="university", cascade="all, delete-orphan")
+
+
+class Program(Base):
+    __tablename__ = "programs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    university_id = Column(Integer, ForeignKey("universities.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False, index=True)
+    degree_level = Column(String, nullable=False, index=True)
+    duration_years = Column(Integer, nullable=False)
+    estimated_tuition_fees = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False)
+    min_gpa = Column(Float, nullable=True)
+    ranking_global = Column(Integer, nullable=True, index=True)
+    ranking_national = Column(Integer, nullable=True, index=True)
+    min_ielts = Column(Float, nullable=True)
+    min_toefl = Column(Integer, nullable=True)
+    application_deadline = Column(String, nullable=True)
+    semester_intake = Column(String, nullable=True, index=True)
+    living_cost_estimate = Column(Integer, nullable=True)
+    scholarship_available = Column(Boolean, default=False, nullable=False)
+    program_url = Column(String, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    university = relationship("University", back_populates="programs")
+
+
+class StudentProfile(Base):
+    __tablename__ = "student_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    gpa = Column(Float, nullable=False)
+    gre_score = Column(Integer, nullable=True)
+    toefl_score = Column(Integer, nullable=True)
+    ielts_score = Column(Float, nullable=True)
+    budget_per_year = Column(Integer, nullable=False)
+    preferred_countries = Column(JSON, nullable=False, default=list)
+    intended_major = Column(String, nullable=False, index=True)
+    degree_level = Column(String, nullable=False, index=True)
+    academic_background = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+
+class UniversityMatchCache(Base):
+    __tablename__ = "university_match_cache"
+    __table_args__ = (
+        UniqueConstraint("student_profile_id", "program_id", "intended_major", name="uq_university_match_cache_lookup"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_profile_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    intended_major = Column(String, nullable=False, index=True)
+    match_score = Column(Integer, nullable=False)
+    explanation = Column(Text, nullable=False)
+    source_ids = Column(JSON, nullable=False, default=list)
+    cached_at = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    student_profile = relationship("StudentProfile")
+    program = relationship("Program")
+
+
+class Scholarship(Base):
+    __tablename__ = "scholarships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    university_id = Column(Integer, ForeignKey("universities.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount_usd = Column(Integer, nullable=True)
+    deadline = Column(String, nullable=True)
+    eligibility_criteria = Column(Text, nullable=True)
+    application_url = Column(String, nullable=True)
+
+    university = relationship("University", back_populates="scholarships")
+
+
+class StudentProgramMatch(Base):
+    __tablename__ = "student_program_matches"
+    __table_args__ = (
+        UniqueConstraint("student_id", "program_id", name="uq_student_program_matches_lookup"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    match_score = Column(Integer, nullable=False)
+    academic_fit = Column(Integer, nullable=False)
+    budget_fit = Column(Integer, nullable=False)
+    location_fit = Column(Integer, nullable=False)
+    missing_requirements = Column(JSON, nullable=False, default=list)
+    strengths = Column(JSON, nullable=False, default=list)
+    recommendations = Column(JSON, nullable=False, default=list)
+    summary = Column(String(500), nullable=False)
+    computed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    student = relationship("StudentProfile")
+    program = relationship("Program")
+
+
+class SavedProgram(Base):
+    __tablename__ = "saved_programs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    saved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    student = relationship("StudentProfile")
+    program = relationship("Program")
+
+
+class StudyApplication(Base):
+    __tablename__ = "applications_study"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="saved", index=True)
+    notes = Column(Text, nullable=True)
+    applied_at = Column(DateTime, nullable=True)
+    deadline = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    student = relationship("StudentProfile")
+    program = relationship("Program")

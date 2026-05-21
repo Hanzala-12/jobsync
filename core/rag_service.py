@@ -8,14 +8,14 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from dotenv import load_dotenv
-from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 
 import chromadb
+from core.llm_provider import LLMProvider, is_fallback_mode_enabled
 
 load_dotenv()
 
-DEFAULT_CHROMA_DIR = os.getenv("CHROMA_DB_DIR", os.path.join(os.getcwd(), "chroma_db"))
+DEFAULT_CHROMA_DIR = os.getenv("CHROMA_PERSIST_DIR") or os.getenv("CHROMA_DB_DIR") or os.path.join(os.getcwd(), "chroma_db")
 DEFAULT_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "jobfit_docs")
 DEFAULT_OUTPUT_DIR = os.path.join(os.getcwd(), "outputs", "cover_letters")
 DEFAULT_EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
@@ -25,7 +25,7 @@ DEFAULT_OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "gpt-4o-mini")
 _embedding_model: SentenceTransformer | None = None
 _chroma_client: chromadb.PersistentClient | None = None
 _collection = None
-_openrouter_client: OpenAI | None = None
+LLM_FALLBACK_MODE = is_fallback_mode_enabled()
 
 
 @dataclass
@@ -58,17 +58,18 @@ def get_chroma_collection(collection_name: str = DEFAULT_COLLECTION_NAME, persis
     return _collection
 
 
-def get_openrouter_client() -> OpenAI:
-    global _openrouter_client
-    if _openrouter_client is not None:
-        return _openrouter_client
+def get_openrouter_client():
+    provider = LLMProvider()
+    if not provider.backends:
+        raise RuntimeError("No LLM API key is set in environment")
+    backend = provider.backends[0]
+    if backend.provider not in {"openrouter", "openai"}:
+        raise RuntimeError("No OpenAI-compatible LLM API key is set in environment")
 
-    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY is not set in environment")
+    from openai import OpenAI
 
-    _openrouter_client = OpenAI(base_url=DEFAULT_OPENROUTER_BASE_URL, api_key=api_key)
-    return _openrouter_client
+    base_url = backend.base_url or (DEFAULT_OPENROUTER_BASE_URL if backend.provider == "openrouter" else os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
+    return OpenAI(base_url=base_url, api_key=backend.api_key)
 
 
 def _query_collection_with_embedding(query_embedding: List[float], k: int, where: Optional[Dict[str, Any]]) -> List[RetrievedChunk]:
@@ -119,6 +120,33 @@ def _format_evidence(chunks: Sequence[RetrievedChunk]) -> str:
     return "\n\n".join(pieces)
 
 
+def _fallback_cover_letter(
+    job_text: str,
+    resume_summary: str,
+    retrieved: Sequence[RetrievedChunk],
+    company_name: str,
+    role: str,
+    tone: str,
+) -> Tuple[str, List[str], List[RetrievedChunk]]:
+    source_ids = [chunk.metadata.get("source_id") or chunk.metadata.get("source") or chunk.id for chunk in retrieved]
+    source_ids = [str(item) for item in source_ids if item]
+    company_line = f" at {company_name}" if company_name else ""
+    role_line = f" for the {role} role" if role else ""
+    evidence = _format_evidence(retrieved[:3])
+    cover_letter = (
+        f"Dear Hiring Manager,{os.linesep}{os.linesep}"
+        f"I am writing to express my interest{role_line}{company_line}. "
+        f"This fallback draft is generated without an LLM so the application flow remains testable.{os.linesep}{os.linesep}"
+        f"Tone: {tone}{os.linesep}{os.linesep}"
+        f"Resume summary:{os.linesep}{resume_summary}{os.linesep}{os.linesep}"
+        f"Job context:{os.linesep}{job_text[:1200]}{os.linesep}{os.linesep}"
+        f"Relevant evidence:{os.linesep}{evidence or 'No retrieved evidence available.'}{os.linesep}{os.linesep}"
+        f"Thank you for considering my application. I would welcome the opportunity to discuss how my background aligns with your needs.{os.linesep}"
+        f"Sincerely,{os.linesep}Applicant"
+    )
+    return cover_letter, source_ids, list(retrieved)
+
+
 def build_cover_letter_prompt(
     job_text: str,
     resume_summary: str,
@@ -161,6 +189,9 @@ def _generate_cover_letter_with_prompt(
     role: str,
     tone: str,
 ) -> Tuple[str, List[str], List[RetrievedChunk]]:
+    if LLM_FALLBACK_MODE:
+        return _fallback_cover_letter(job_text, resume_summary, retrieved, company_name, role, tone)
+
     prompt = build_cover_letter_prompt(
         job_text=job_text,
         resume_summary=resume_summary,
@@ -170,18 +201,16 @@ def _generate_cover_letter_with_prompt(
         tone=tone,
     )
 
-    client = get_openrouter_client()
-    completion = client.chat.completions.create(
-        model=DEFAULT_OPENROUTER_MODEL,
-        messages=[
-            {"role": "system", "content": "You write crisp, accurate cover letters and never hallucinate company facts."},
-            {"role": "user", "content": prompt},
-        ],
+    llm = LLMProvider()
+    response = llm.ask(
+        "You write crisp, accurate cover letters and never hallucinate company facts.",
+        prompt,
         temperature=0.6,
-        max_tokens=900,
     )
+    if response.startswith("AI error:"):
+        return _fallback_cover_letter(job_text, resume_summary, retrieved, company_name, role, tone)
 
-    cover_letter = completion.choices[0].message.content.strip()
+    cover_letter = response.strip()
     source_ids = [chunk.metadata.get("source_id") or chunk.metadata.get("source") or chunk.id for chunk in retrieved]
     source_ids = [str(item) for item in source_ids if item]
     return cover_letter, source_ids, retrieved
@@ -254,3 +283,219 @@ def save_cover_letter_artifacts(
         json.dump(payload, file, ensure_ascii=False, indent=2)
 
     return {"text_path": txt_path, "json_path": json_path}
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(round(float(value)))
+    except Exception:
+        return default
+
+
+def _student_profile_summary(student_profile: Dict[str, Any]) -> str:
+    preferred_countries = student_profile.get("preferred_countries") or []
+    preferred_text = ", ".join(str(item) for item in preferred_countries if item)
+    return (
+        f"GPA: {student_profile.get('gpa', 'N/A')}\n"
+        f"GRE: {student_profile.get('gre_score', 'N/A')}\n"
+        f"TOEFL: {student_profile.get('toefl_score', 'N/A')}\n"
+        f"Budget per year: {student_profile.get('budget_per_year', 'N/A')}\n"
+        f"Preferred countries: {preferred_text or 'Any'}\n"
+        f"Intended major: {student_profile.get('intended_major', '')}\n"
+        f"Degree level: {student_profile.get('degree_level', '')}"
+    )
+
+
+def _program_summary(program: Dict[str, Any], university: Dict[str, Any]) -> str:
+    return (
+        f"University: {university.get('name', '')}\n"
+        f"Country: {university.get('country', '')}\n"
+        f"City: {university.get('city', '')}\n"
+        f"Program: {program.get('name', '')}\n"
+        f"Degree level: {program.get('degree_level', '')}\n"
+        f"Duration years: {program.get('duration_years', '')}\n"
+        f"Estimated tuition fees: {program.get('estimated_tuition_fees', '')} {program.get('currency', '')}\n"
+        f"Minimum GPA: {program.get('min_gpa', 'N/A')}"
+    )
+
+
+def build_match_analysis_prompt(
+    student_profile: Dict[str, Any],
+    program: Dict[str, Any],
+    university: Dict[str, Any],
+    retrieved_chunks: Sequence[RetrievedChunk],
+) -> str:
+    evidence = _format_evidence(retrieved_chunks)
+    return f"""You are an admissions advisor helping a student compare a university program to their profile.
+Return STRICT JSON with exactly these keys:
+{{"match_score": 0-100 integer, "explanation": "brief explanation"}}
+
+Student profile:
+{_student_profile_summary(student_profile)}
+
+Program details:
+{_program_summary(program, university)}
+
+Relevant retrieved evidence:
+{evidence or 'No retrieved evidence available.'}
+
+Instructions:
+- Give a realistic score from 0 to 100.
+- Explain the fit in 2-4 concise sentences.
+- Mention admissions constraints, budget fit, academic fit, and country preference when relevant.
+- Do not add markdown or extra keys.
+"""
+
+
+def _heuristic_match_analysis(student_profile: Dict[str, Any], program: Dict[str, Any], university: Dict[str, Any]) -> Tuple[int, str]:
+    score = 50
+    explanations: List[str] = []
+
+    student_gpa = float(student_profile.get("gpa") or 0)
+    min_gpa = float(program.get("min_gpa") or 0)
+    budget = int(student_profile.get("budget_per_year") or 0)
+    tuition = int(program.get("estimated_tuition_fees") or 0)
+    preferred_countries = {str(item).strip().lower() for item in (student_profile.get("preferred_countries") or []) if str(item).strip()}
+    country = str(university.get("country") or "").strip().lower()
+    degree_level = str(student_profile.get("degree_level") or "").strip().lower()
+    program_level = str(program.get("degree_level") or "").strip().lower()
+    intended_major = str(student_profile.get("intended_major") or "").strip().lower()
+    program_name = str(program.get("name") or "").strip().lower()
+
+    if min_gpa:
+        if student_gpa >= min_gpa:
+            score += 18
+            explanations.append("The GPA requirement looks achievable.")
+        else:
+            gap = min_gpa - student_gpa
+            score -= min(20, max(5, int(gap * 20)))
+            explanations.append("The GPA is below the stated minimum, so admission may be challenging.")
+
+    if tuition and budget:
+        if budget >= tuition:
+            score += 15
+            explanations.append("The estimated tuition fits within the yearly budget.")
+        else:
+            score -= 18
+            explanations.append("The tuition appears above the stated budget.")
+
+    if country and country in preferred_countries:
+        score += 10
+        explanations.append("The university is in a preferred country.")
+
+    if degree_level and program_level and degree_level == program_level:
+        score += 8
+        explanations.append("The degree level matches the student’s goal.")
+
+    major_tokens = {token for token in intended_major.split() if len(token) > 2}
+    program_tokens = {token for token in program_name.split() if len(token) > 2}
+    if major_tokens.intersection(program_tokens):
+        score += 9
+        explanations.append("The program title aligns with the intended major.")
+
+    score = max(0, min(100, score))
+    if not explanations:
+        explanations.append("The match is moderate based on the available program and profile details.")
+
+    return score, " ".join(explanations)
+
+
+def _parse_match_payload(content: str) -> Dict[str, Any]:
+    raw = (content or "").strip()
+    if not raw:
+        return {}
+
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            parsed = json.loads(raw[start : end + 1])
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+
+    return {}
+
+
+def _generate_match_analysis_with_prompt(
+    retrieved: List[RetrievedChunk],
+    student_profile: Dict[str, Any],
+    program: Dict[str, Any],
+    university: Dict[str, Any],
+) -> Tuple[int, str, List[str], List[RetrievedChunk]]:
+    if LLM_FALLBACK_MODE:
+        score, explanation = _heuristic_match_analysis(student_profile, program, university)
+        source_ids = [str(chunk.metadata.get("source_id") or chunk.metadata.get("source") or chunk.id) for chunk in retrieved]
+        source_ids = [item for item in source_ids if item]
+        return score, explanation, source_ids, retrieved
+
+    prompt = build_match_analysis_prompt(student_profile, program, university, retrieved)
+
+    try:
+        content = LLMProvider().ask(
+            "You evaluate university-program fit and always return strict JSON.",
+            prompt,
+            temperature=0.2,
+        )
+        if content.startswith("AI error:"):
+            raise RuntimeError(content)
+        parsed = _parse_match_payload(content)
+        score = _safe_int(parsed.get("match_score"), 0)
+        explanation = str(parsed.get("explanation") or "").strip()
+        if not explanation:
+            score, explanation = _heuristic_match_analysis(student_profile, program, university)
+        score = max(0, min(100, score))
+    except Exception:
+        score, explanation = _heuristic_match_analysis(student_profile, program, university)
+
+    source_ids = [str(chunk.metadata.get("source_id") or chunk.metadata.get("source") or chunk.id) for chunk in retrieved]
+    source_ids = [item for item in source_ids if item]
+    return score, explanation, source_ids, retrieved
+
+
+def generate_match_analysis(
+    student_profile: Dict[str, Any],
+    program: Dict[str, Any],
+    university: Dict[str, Any],
+    *,
+    top_k: int = 5,
+    metadata_filter: Optional[Dict[str, Any]] = None,
+) -> Tuple[int, str, List[str], List[RetrievedChunk]]:
+    query_text = "\n".join(
+        [
+            _student_profile_summary(student_profile),
+            _program_summary(program, university),
+        ]
+    )
+    try:
+        retrieved = retrieve_relevant_chunks(query_text, k=top_k, where=metadata_filter)
+    except Exception:
+        retrieved = []
+    return _generate_match_analysis_with_prompt(retrieved, student_profile, program, university)
+
+
+async def generate_match_analysis_async(
+    student_profile: Dict[str, Any],
+    program: Dict[str, Any],
+    university: Dict[str, Any],
+    *,
+    top_k: int = 5,
+    metadata_filter: Optional[Dict[str, Any]] = None,
+) -> Tuple[int, str, List[str], List[RetrievedChunk]]:
+    query_text = "\n".join([
+        _student_profile_summary(student_profile),
+        _program_summary(program, university),
+    ])
+    try:
+        retrieved = await retrieve_relevant_chunks_async(query_text, k=top_k, where=metadata_filter)
+    except Exception:
+        retrieved = []
+    return _generate_match_analysis_with_prompt(retrieved, student_profile, program, university)

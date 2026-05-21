@@ -63,13 +63,40 @@ function Applications() {
       </div>
 
       {showForm && (
-        <section className="form-box">
-          <input value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="Company" />
-          <input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} placeholder="Role" />
-          <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-            {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
-          <input value={form.next_action} onChange={(event) => setForm({ ...form, next_action: event.target.value })} placeholder="Next action" />
+        <section className="form-box panel-raised app-form-panel">
+          <div className="form-header">
+            <div>
+              <p className="section-label">Application form</p>
+              <h2>{editingId ? 'Edit Application' : 'New Application'}</h2>
+            </div>
+            <button
+              type="button"
+              className="form-close"
+              onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm) }}
+            >
+              ×
+            </button>
+          </div>
+          <div className="form-grid">
+            <label>
+              <span>Company</span>
+              <input value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="Company" />
+            </label>
+            <label>
+              <span>Role</span>
+              <input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} placeholder="Role" />
+            </label>
+            <label>
+              <span>Status</span>
+              <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+                {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </label>
+            <label className="span-2">
+              <span>Next action</span>
+              <input value={form.next_action} onChange={(event) => setForm({ ...form, next_action: event.target.value })} placeholder="Next action" />
+            </label>
+          </div>
           <div className="form-actions">
             <Button onClick={save}>Save</Button>
             <Button variant="secondary" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm) }}>Cancel</Button>
@@ -77,41 +104,56 @@ function Applications() {
         </section>
       )}
 
-      <table className="apps-table">
-        <thead>
-          <tr>
-            <th>Company</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Applied</th>
-            <th>Next Action</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {applications.map((app) => (
-            <tr key={app.id}>
-              <td>{app.company}</td>
-              <td>{app.role}</td>
-              <td><span className={`status-badge status-${app.status}`}>{app.status}</span></td>
-              <td>{app.applied_date ? new Date(app.applied_date).toLocaleDateString() : '-'}</td>
-              <td>{app.next_action || '-'}</td>
-              <td>
-                <button className="action-link edit" onClick={() => editRow(app)}>Edit</button>
-                <button
-                  className="action-link delete"
-                  onClick={async () => {
-                    await applicationsAPI.delete(app.id)
-                    loadApplications()
-                  }}
-                >
-                  Delete
-                </button>
-              </td>
+      <article className="panel table-panel">
+        <table className="apps-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Applied</th>
+              <th>Next Action</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {applications.length > 0 ? applications.map((app) => (
+              <tr key={app.id}>
+                <td className="company-cell">
+                  <span className="avatar-initial">{String(app.company || '?').charAt(0).toUpperCase()}</span>
+                  <span>{app.company}</span>
+                </td>
+                <td>{app.role}</td>
+                <td><span className={`status-badge status-${app.status}`}>{app.status}</span></td>
+                <td>{app.applied_date ? new Date(app.applied_date).toLocaleDateString() : '-'}</td>
+                <td>{app.next_action || '-'}</td>
+                <td>
+                  <button className="icon-btn edit" onClick={() => editRow(app)} aria-label="Edit application">✎</button>
+                  <button
+                    className="icon-btn delete"
+                    onClick={async () => {
+                      await applicationsAPI.delete(app.id)
+                      loadApplications()
+                    }}
+                    aria-label="Delete application"
+                  >
+                    🗑
+                  </button>
+                </td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan="6" className="empty-state">
+                  <div>
+                    <p>Nothing here yet.</p>
+                    <span>Add your first application to start tracking it.</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </article>
     </div>
   )
 }

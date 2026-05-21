@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional
+from typing import List, Optional, Dict
 import re
 
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +12,7 @@ import logging
 import os
 from backend import services as _services
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from backend.database import get_db
 from backend.models import Job, UserProfile
@@ -25,6 +26,8 @@ from backend.schemas import (
     SalaryEstimateResponse,
 )
 from backend.services.job_apis import clean_text, get_pakistan_source_status, search_jobs
+import requests
+from scrapers.rozee_scraper import ROZEE_USER_AGENT, BASE_URL
 from core.deduplicator import process_incoming_job
 from core.llm_provider import LLMProvider
 from core.normalizer import normalize_job
@@ -183,81 +186,109 @@ def search_jobs_endpoint(
     remote_only: bool = False,
     pakistan_only: bool = False,
     country_code: str = "pk",
+    page: int = 1,
+    limit: int = 20,
+    sort: str = "newest",
     db: Session = Depends(get_db),
 ):
-    # First check prefetched jobs cache for fast responses
+    # Database-only search: do not perform live scraping during user requests.
+
+    # Build base query
+    q = db.query(Job).filter(Job.is_active == True)
+    if query:
+        term = f"%{query.lower()}%"
+        q = q.filter(
+            (func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term))
+        )
+    if city:
+        q = q.filter(func.lower(Job.city) == city.strip().lower())
+
+    if sort == "newest":
+        q = q.order_by(Job.scraped_at.desc().nullslast(), Job.fetched_at.desc().nullslast())
+    else:
+        q = q.order_by(Job.fetched_at.desc().nullslast())
+
+    total = q.count()
+    page = max(1, page)
+    limit = max(1, min(100, limit))
+    items = q.offset((page - 1) * limit).limit(limit).all()
+
+    def job_to_out(j: Job):
+        return JobOut.model_validate(
+            {
+                "id": j.id,
+                "title": j.title,
+                "company": j.company,
+                "location": j.location,
+                "description": j.description,
+                "url": j.url,
+                "source": j.source,
+                "posted_date": j.posted_date,
+                "salary": j.salary,
+            }
+        )
+
+    return [job_to_out(j) for j in items]
+
+
+@router.get('/test_rozee')
+def test_rozee_endpoint(query: str = 'software engineer', city: Optional[str] = None):
+    """Diagnostic endpoint: backend fetches Rozee search page and returns status and link count."""
+    city_slug = (city or 'pakistan').strip().lower().replace(' ', '-')
+    query_slug = (query or 'software engineer').strip().lower().replace(' ', '-')
+    url = f"{BASE_URL}/search/{query_slug}-jobs-in-{city_slug}"
+    headers = {"User-Agent": ROZEE_USER_AGENT, "Accept-Language": "en-US,en;q=0.9"}
     try:
-        words = [w for w in re.findall(r"[a-z0-9+#.]+", (query or "").lower()) if len(w) > 2]
-        if words:
-            where_clauses = []
-            params = []
-            for w in words:
-                clause = "(lower(title) LIKE ? OR lower(description) LIKE ?)"
-                where_clauses.append(clause)
-                like = f"%{w}%"
-                params.extend([like, like])
-            sql = "SELECT job_id, title, company, description, source FROM prefetched_jobs WHERE " + " AND ".join(where_clauses) + " ORDER BY fetched_at DESC LIMIT 50"
-            with engine.connect() as conn:
-                rows = conn.execute(sql, params).fetchall()
-                if rows and len(rows) >= 5:
-                    jobs = []
-                    for r in rows:
-                        jobs.append({
-                            "external_id": r[0],
-                            "title": r[1],
-                            "company": r[2],
-                            "description": r[3],
-                            "source": r[4],
-                            "url": r[0] if (r[0] and r[0].startswith("http")) else "",
-                        })
-                    if not any((job.get("source") or "").lower() == "rozee" for job in jobs):
-                        try:
-                            city_hint = (city or "").strip() or None
-                            rozee_city = city_hint
-                            if not rozee_city and (location or "").strip().lower() in {"", "pakistan", "remote", "uae", "uk"}:
-                                rozee_city = None
-                            rozee_jobs = _services.job_apis.fetch_rozee_pakistan(query, rozee_city, max_pages=1)
-                            jobs.extend(rozee_jobs)
-                        except Exception:
-                            pass
-                    for job in jobs:
-                        job["description"] = clean_text(job.get("description", ""))
-                    return _upsert_jobs(db, jobs)
-    except Exception:
-        # on any error, fall back to live search
-        pass
+        resp = requests.get(url, headers=headers, timeout=15)
+        text = resp.text or ''
+        import re as _re
+        link_count = len(_re.findall(r"-jobs-[0-9]+", text))
+        snippet = text[:2000]
+        return {"url": url, "status_code": resp.status_code, "link_count": link_count, "snippet": snippet}
+    except Exception as exc:
+        return {"url": url, "error": str(exc)}
 
-    # Not enough prefetched results; perform live search and update cache asynchronously
-    jobs = search_jobs(
-        query=query,
-        location=location,
-        city=city,
-        remote_only=remote_only,
-        pakistan_only=pakistan_only,
-        country_code=country_code,
-    )
 
-    for job in jobs:
-        job["description"] = clean_text(job.get("description", ""))
-
-    # Update cache in background (fire-and-forget)
+@router.get("/search/diagnostics")
+def search_jobs_diagnostics(
+    query: str = "software engineer",
+    location: str = "Pakistan",
+    city: Optional[str] = None,
+    remote_only: bool = False,
+    pakistan_only: bool = False,
+    country_code: str = "pk",
+    db: Session = Depends(get_db),
+):
+    diagnostics: Dict = {}
+    # Return diagnostics about DB query execution instead of live scraping
     try:
-        def _bg_update_cache(jobs_list):
-            try:
-                from backend.job_indexer import _upsert_prefetched
-                for j in jobs_list:
-                    try:
-                        _upsert_prefetched(j)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+        q = db.query(Job).filter(Job.is_active == True)
+        if query:
+            term = f"%{query.lower()}%"
+            q = q.filter((func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term)))
+        items = q.order_by(Job.scraped_at.desc().nullslast()).limit(50).all()
+        job_dicts = [
+            {
+                "id": j.id,
+                "external_id": j.external_id,
+                "title": j.title,
+                "company": j.company,
+                "description": j.description,
+                "source": j.source,
+                "url": j.url,
+                "apply_url": j.apply_url,
+                "location": j.location,
+                "salary": j.salary,
+                "posted_date": j.posted_date,
+            }
+            for j in items
+        ]
+        diagnostics["source"] = "database"
+    except Exception as exc:
+        diagnostics["error"] = str(exc)
+        job_dicts = []
 
-        _BG_EXECUTOR.submit(_bg_update_cache, jobs)
-    except Exception:
-        pass
-
-    return _upsert_jobs(db, jobs)
+    return {"jobs": job_dicts, "diagnostics": diagnostics}
 
 
 @router.get('/search/stream')
@@ -268,91 +299,25 @@ def search_jobs_stream(
     remote_only: bool = False,
     pakistan_only: bool = False,
     country_code: str = 'pk',
+    db: Session = Depends(get_db),
 ):
-    """Stream job search results as server-sent events (SSE) for progressive rendering."""
-
     def event_stream():
-        start_ts = _time.time()
-        combined = []
-        seen_keys = set()
-
-        city_hint = (city or '').strip() or None
-        location_hint = (location or '').strip().lower()
-        local_city = city_hint
-        if not local_city and location_hint in {'', 'pakistan', 'remote', 'uae', 'uk'}:
-            local_city = None
-        elif not local_city:
-            local_city = location
-
-        # build list of source callables depending on location
-        src_calls = []
-        # fast sources
-        src_calls.append(lambda: _services.job_apis.fetch_rozee_pakistan(query, local_city, max_pages=1))
-        src_calls.append(lambda: _services.job_apis.fetch_mustakbil_pakistan(query, local_city, max_pages=1))
-        src_calls.append(lambda: _services.job_apis.fetch_bing_pakistan(query, local_city, max_pages=1))
-        src_calls.append(lambda: _services.job_apis.fetch_brightspyre(query, max_pages=1))
-        src_calls.append(lambda: _services.job_apis.fetch_linkedin_indexed(query, local_city, max_jobs=4))
-        src_calls.append(lambda: _services.job_apis.fetch_company_careers(query, company_limit=6))
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(src_calls)) as executor:
-            future_to_name = {executor.submit(call): f"source_{index}" for index, call in enumerate(src_calls)}
-            pending = set(future_to_name)
-
-            while pending:
-                done, pending = concurrent.futures.wait(
-                    pending,
-                    timeout=0.5,
-                    return_when=concurrent.futures.FIRST_COMPLETED,
-                )
-                if not done:
-                    continue
-
-                for fut in done:
-                    name = future_to_name.get(fut, "unknown")
-                    try:
-                        res = fut.result(timeout=0)
-                    except Exception as exc:
-                        _logger.warning("stream source failed: %s (%s)", name, exc)
-                        res = []
-
-                    new = []
-                    for job in res:
-                        job = _normalize_stream_job(job)
-                        key = job.get('external_id') or f"{job.get('title')}::{job.get('company')}::{job.get('url')}"
-                        if key in seen_keys:
-                            continue
-                        seen_keys.add(key)
-                        new.append(job)
-                        combined.append(job)
-
-                    payload = {
-                        'partial': new,
-                        'combined_count': len(combined),
-                        'elapsed': round(_time.time() - start_ts, 2),
-                    }
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-            if len(combined) < 5:
-                try:
-                    indexed = _services.job_apis.fetch_indexed_pakistan(query, local_city or location, max_urls=6)
-                    new = []
-                    for job in indexed:
-                        job = _normalize_stream_job(job)
-                        key = job.get('external_id') or f"{job.get('title')}::{job.get('company')}::{job.get('url')}"
-                        if key in seen_keys:
-                            continue
-                        seen_keys.add(key)
-                        new.append(job)
-                        combined.append(job)
-                    if new:
-                        payload = {'partial': new, 'combined_count': len(combined), 'elapsed': round(_time.time() - start_ts, 2)}
-                        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                except Exception as exc:
-                    _logger.warning("indexed fallback failed: %s", exc)
-
-        # Final event with done flag and all combined results
-        final = {'done': True, 'results': combined, 'elapsed': round(_time.time() - start_ts, 2)}
-        yield f"data: {json.dumps(final, ensure_ascii=False)}\n\n"
+        q = db.query(Job).filter(Job.is_active == True)
+        if query:
+            term = f"%{query.lower()}%"
+            q = q.filter((func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term)))
+        items = q.order_by(Job.scraped_at.desc().nullslast()).limit(100).all()
+        for j in items:
+            payload = {
+                "id": j.id,
+                "title": j.title,
+                "company": j.company,
+                "description": j.description,
+                "source": j.source,
+                "url": j.url,
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        yield f"event: done\ndata: {json.dumps({'total': len(items)})}\n\n"
 
     return StreamingResponse(event_stream(), media_type='text/event-stream')
 
@@ -530,7 +495,7 @@ Return JSON only:
 @router.get("/autocomplete")
 def autocomplete_keywords(query: str = "", db: Session = Depends(get_db)):
     """Return matching job keywords for autocomplete dropdown from config + stored jobs."""
-    from config.pakistan_jobs_config import KEYWORDS
+    from backend.config.pakistan_jobs_config import KEYWORDS
     from backend.models import Job
     
     if not query or len(query) < 1:

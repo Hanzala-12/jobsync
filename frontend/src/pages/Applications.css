@@ -1,7 +1,7 @@
 ﻿.applications-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .table-head {
@@ -11,77 +11,171 @@
 }
 
 .form-box {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.form-box input,
-.form-box select {
+.app-form-panel {
+  gap: 16px;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f4f4f5;
+}
+
+.form-header h2 {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.form-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px;
+  background: #fff;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-grid label span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.form-grid .span-2 {
+  grid-column: span 2;
 }
 
 .form-actions {
-  grid-column: 1 / -1;
   display: flex;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+.table-panel {
+  padding: 0;
+  overflow: hidden;
 }
 
 .apps-table {
   width: 100%;
   border-collapse: collapse;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
+}
+
+.apps-table thead {
+  background: rgba(250, 250, 250, 0.8);
 }
 
 .apps-table th {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  color: #a1a1aa;
   text-align: left;
-  padding: 12px;
+  padding: 14px 12px;
   border-bottom: 1px solid var(--border);
+  font-weight: 700;
 }
 
 .apps-table td {
   height: 48px;
-  padding: 10px 12px;
+  padding: 14px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .apps-table tr:hover td {
-  background: var(--bg-hover);
+  background: rgba(250, 250, 250, 0.8);
 }
 
-.action-link {
-  border: none;
-  background: none;
+.company-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: #09090b;
+}
+
+.avatar-initial {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  color: #71717a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #a1a1aa;
   cursor: pointer;
-  margin-right: 8px;
+  margin-right: 6px;
 }
 
-.action-link.edit {
-  color: var(--accent);
+.icon-btn:hover {
+  color: #27272a;
+  border-color: #d4d4d8;
 }
 
-.action-link.delete {
-  color: var(--danger);
+.empty-state {
+  padding: 42px 12px;
+  text-align: center;
+  color: #71717a;
+}
+
+.empty-state p {
+  font-size: 14px;
+  font-weight: 600;
+  color: #09090b;
+  margin-bottom: 4px;
+}
+
+.empty-state span {
+  font-size: 13px;
 }
 
 @media (max-width: 900px) {
-  .form-box {
+  .form-grid {
     grid-template-columns: 1fr;
   }
 
   .apps-table {
     display: block;
     overflow-x: auto;
+  }
+
+  .form-grid .span-2 {
+    grid-column: span 1;
   }
 }
