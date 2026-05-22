@@ -1,5 +1,8 @@
 import axios from 'axios'
 
+const AUTH_TOKEN_KEY = 'jobsync_access_token'
+let authToken = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : ''
+
 function resolveApiBaseUrl() {
   const configured = String(import.meta.env.VITE_API_URL || '').trim()
   if (configured) {
@@ -15,9 +18,34 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
 })
 
+export function setAuthToken(token) {
+  authToken = token || ''
+  if (typeof window === 'undefined') return
+  if (authToken) {
+    localStorage.setItem(AUTH_TOKEN_KEY, authToken)
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+  }
+}
+
+export function getStoredAuthToken() {
+  if (authToken) return authToken
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem(AUTH_TOKEN_KEY) || ''
+}
+
+export function clearAuthToken() {
+  setAuthToken('')
+}
+
 apiClient.interceptors.request.use((config) => {
   if (!API_BASE_URL && typeof config.url === 'string' && config.url.startsWith('/') && !config.url.startsWith('/api/')) {
     config.url = `/api${config.url}`
+  }
+  const token = getStoredAuthToken()
+  if (token) {
+    config.headers = config.headers || {}
+    config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
@@ -61,6 +89,13 @@ apiClient.interceptors.response.use(
       error.response.data = normalized
     }
 
+    if (status === 401 && getStoredAuthToken()) {
+      clearAuthToken()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('jobsync-auth-invalidated'))
+      }
+    }
+
     error.message = message
     error.userMessage = message
     error.apiError = normalized
@@ -81,6 +116,13 @@ export const resumeAPI = {
   getVersion: (id) => apiClient.get(`/resume/versions/${id}`),
   deleteVersion: (id) => apiClient.delete(`/resume/versions/${id}`),
   updateVersionUsedFor: (id, usedFor) => apiClient.patch(`/resume/versions/${id}`, { used_for: usedFor }),
+}
+
+export const authAPI = {
+  login: (payload) => apiClient.post('/auth/login', payload),
+  signup: (payload) => apiClient.post('/auth/signup', payload),
+  me: () => apiClient.get('/auth/me'),
+  refresh: (refresh_token) => apiClient.post('/auth/refresh', { refresh_token }),
 }
 
 export const jobsAPI = {
@@ -131,6 +173,7 @@ export const applicationsAPI = {
 
 export const studentAPI = {
   createProfile: (data) => apiClient.post('/student/profile', data),
+  getCurrentProfile: () => apiClient.get('/api/student/profile'),
   getProfile: (id) => apiClient.get(`/student/profile/${id}`),
   updateProfile: (id, data) => apiClient.patch(`/student/profile/${id}`, data),
   getRecommendations: (profileId, limit = 20, filters = {}) =>

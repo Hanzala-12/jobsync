@@ -1,18 +1,30 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
+import { authAPI, setAuthToken } from '../api/client'
 import './Auth.css'
 
 function Login({ onLogin }) {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    localStorage.setItem('auth', 'true')
-    onLogin?.()
-    navigate('/', { replace: true })
+    setLoading(true)
+    setError('')
+    try {
+      const response = await authAPI.login({ email, password })
+      setAuthToken(response.data?.access_token || '')
+      onLogin?.(response.data)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setError(err.userMessage || 'Could not log in')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -47,6 +59,8 @@ function Login({ onLogin }) {
           <h1>Welcome back</h1>
           <p className="subtitle">Log in to continue tracking your applications and job matches.</p>
 
+          {error && <p className="auth-error">{error}</p>}
+
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="auth-field">
               <label htmlFor="email">Email</label>
@@ -57,7 +71,7 @@ function Login({ onLogin }) {
               <input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" />
             </div>
             <div className="auth-actions">
-              <Button type="submit" className="w-full">Log in</Button>
+              <Button type="submit" className="w-full" loading={loading}>Log in</Button>
               <p className="auth-link">Don’t have an account? <Link to="/signup">Sign up</Link></p>
             </div>
           </form>

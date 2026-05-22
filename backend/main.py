@@ -14,7 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import inspect
 
 from backend.database import engine, Base
-from backend.routers import resume, jobs, applications, cover_letter, intelligence, student
+from backend.routers import resume, jobs, applications, cover_letter, intelligence, student, auth
 from backend.routers import kanban, voice_interview, browser_extension, followup
 import importlib
 profile = importlib.import_module('backend.routers.profile')
@@ -160,6 +160,7 @@ app.add_middleware(RequestLoggingMiddleware)
 
 # Include original routers
 app.include_router(resume.router)
+app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(cover_letter.router)

@@ -18,23 +18,100 @@ import StudentProfileForm from './components/StudentProfileForm'
 import UniversityDashboard from './components/UniversityDashboard'
 import UniversityMatchList from './components/UniversityMatchList'
 import MyApplications from './components/MyApplications'
+import StudentUniversitySearch from './components/StudentUniversitySearch'
+import StudentSavedUniversities from './components/StudentSavedUniversities'
+import StudentScholarships from './components/StudentScholarships'
+import { authAPI, clearAuthToken, getStoredAuthToken, setAuthToken, studentAPI } from './api/client'
+
+const AUTH_BYPASS = true
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(localStorage.getItem('auth') === 'true')
-  const [studentProfileId, setStudentProfileId] = useState(Number(localStorage.getItem('student_profile_id') || 0))
+  const [authLoading, setAuthLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [studentProfileId, setStudentProfileId] = useState(0)
 
   useEffect(() => {
-    const syncProfile = () => setStudentProfileId(Number(localStorage.getItem('student_profile_id') || 0))
-    window.addEventListener('storage', syncProfile)
-    return () => window.removeEventListener('storage', syncProfile)
+    const bootstrap = async () => {
+      if (AUTH_BYPASS) {
+        setIsAuthenticated(true)
+        setStudentProfileId(0)
+        setAuthLoading(false)
+        return
+      }
+
+      const token = getStoredAuthToken()
+      if (!token) {
+        setAuthLoading(false)
+        return
+      }
+
+      setAuthToken(token)
+      try {
+        const [, profileResponse] = await Promise.all([
+          authAPI.me(),
+          studentAPI.getCurrentProfile().catch(() => null),
+        ])
+        setIsAuthenticated(true)
+        const profileId = Number(profileResponse?.data?.id || 0)
+        setStudentProfileId(profileId)
+      } catch {
+        clearAuthToken()
+        setIsAuthenticated(false)
+        setStudentProfileId(0)
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+
+    bootstrap()
+
+    const handleInvalidation = () => {
+      setIsAuthenticated(false)
+      setStudentProfileId(0)
+    }
+
+    window.addEventListener('jobsync-auth-invalidated', handleInvalidation)
+    return () => window.removeEventListener('jobsync-auth-invalidated', handleInvalidation)
   }, [])
 
-  const handleAuth = () => {
-    localStorage.setItem('auth', 'true')
+  const handleAuth = async (authData) => {
+    if (authData?.access_token) {
+      setAuthToken(authData.access_token)
+    }
     setIsAuthenticated(true)
+
+    try {
+      const response = await studentAPI.getCurrentProfile()
+      const profileId = Number(response.data?.id || 0)
+      setStudentProfileId(profileId)
+    } catch {
+      setStudentProfileId(0)
+    }
   }
 
-  const requireStudentProfile = (element) => (studentProfileId ? element : <Navigate to="/student/profile" replace />)
+  const handleStudentProfileCreated = (profileId) => {
+    setStudentProfileId(Number(profileId || 0))
+    setStudyMode(true)
+  }
+
+  const handleLogout = () => {
+    clearAuthToken()
+    setIsAuthenticated(false)
+    setStudentProfileId(0)
+  }
+
+  if (authLoading) {
+    return (
+      <div className="auth-shell">
+        <section className="auth-panel">
+          <div className="auth-card">
+            <h1>Loading your workspace</h1>
+            <p className="subtitle">Checking your session and study profile...</p>
+          </div>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <Router>
@@ -45,7 +122,10 @@ function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       ) : (
-        <Layout>
+        <Layout
+          studentProfileId={studentProfileId}
+          onLogout={handleLogout}
+        >
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/resume" element={<Resume />} />
@@ -59,10 +139,13 @@ function App() {
             <Route path="/skill-gap" element={<SkillGap />} />
             <Route path="/daily-scout" element={<DailyScout />} />
             <Route path="/student" element={<Navigate to={studentProfileId ? '/student/dashboard' : '/student/profile'} replace />} />
-            <Route path="/student/profile" element={<StudentProfileForm />} />
-            <Route path="/student/dashboard" element={requireStudentProfile(<UniversityDashboard />)} />
-            <Route path="/student/matches" element={requireStudentProfile(<UniversityMatchList profileId={studentProfileId} />)} />
-            <Route path="/student/applications" element={requireStudentProfile(<MyApplications />)} />
+            <Route path="/student/profile" element={<StudentProfileForm onCreated={handleStudentProfileCreated} />} />
+            <Route path="/student/dashboard" element={<UniversityDashboard profileId={studentProfileId} />} />
+            <Route path="/student/search" element={<StudentUniversitySearch profileId={studentProfileId} />} />
+            <Route path="/student/matches" element={<UniversityMatchList profileId={studentProfileId} />} />
+            <Route path="/student/saved" element={<StudentSavedUniversities profileId={studentProfileId} />} />
+            <Route path="/student/applications" element={<MyApplications profileId={studentProfileId} />} />
+            <Route path="/student/scholarships" element={<StudentScholarships profileId={studentProfileId} />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="/signup" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />

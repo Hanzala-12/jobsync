@@ -5,14 +5,14 @@ import UniversityMatchList from './UniversityMatchList'
 import { studentAPI } from '../api/client'
 import './UniversityModule.css'
 
-function UniversityDashboard() {
+function UniversityDashboard({ profileId: providedProfileId }) {
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
   const [savedPrograms, setSavedPrograms] = useState([])
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const profileId = Number(localStorage.getItem('student_profile_id') || 0)
+  const profileId = Number(providedProfileId || 0)
 
   const loadSummary = async () => {
     if (!profileId) {
@@ -66,7 +66,7 @@ function UniversityDashboard() {
             <div>
               <p className="section-label">No profile found</p>
               <h2>Create your profile first</h2>
-              <p>We need a student profile before matches can be calculated.</p>
+              <p>We need a student profile before matches can be calculated. After that, saved programs and application tracking will sync here on every refresh.</p>
               <div style={{ marginTop: 12 }}>
                 <Button onClick={() => navigate('/student/profile')}>Create Profile</Button>
               </div>

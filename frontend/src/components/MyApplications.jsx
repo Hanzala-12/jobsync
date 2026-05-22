@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Button from './Button'
 import { studentAPI } from '../api/client'
 import './UniversityModule.css'
@@ -9,8 +10,8 @@ function titleCase(value) {
   return String(value || '').replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
-function MyApplications() {
-  const profileId = Number(localStorage.getItem('student_profile_id') || 0)
+function MyApplications({ profileId }) {
+  const navigate = useNavigate()
   const [applications, setApplications] = useState([])
   const [savedPrograms, setSavedPrograms] = useState([])
   const [loading, setLoading] = useState(true)
@@ -94,7 +95,16 @@ function MyApplications() {
     return (
       <div className="study-page">
         <div className="study-panel">
-          <div className="empty-block"><p>Create your profile first to track study applications.</p></div>
+          <div className="empty-block">
+            <div>
+              <p className="section-label">Start here</p>
+              <h2>Create your profile first</h2>
+              <p>Create a student profile so your saved universities and study applications persist in the database instead of disappearing on refresh.</p>
+              <div style={{ marginTop: 12 }}>
+                <Button onClick={() => navigate('/student/profile')}>Create Profile</Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
+import { authAPI, setAuthToken } from '../api/client'
 import './Auth.css'
 
 function Signup({ onSignup }) {
@@ -8,12 +9,23 @@ function Signup({ onSignup }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    localStorage.setItem('auth', 'true')
-    onSignup?.()
-    navigate('/', { replace: true })
+    setLoading(true)
+    setError('')
+    try {
+      const response = await authAPI.signup({ email, password })
+      setAuthToken(response.data?.access_token || '')
+      onSignup?.(response.data)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setError(err.userMessage || 'Could not create your account')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -48,6 +60,8 @@ function Signup({ onSignup }) {
           <h1>Create your account</h1>
           <p className="subtitle">Sign up to start managing your job search in one place.</p>
 
+          {error && <p className="auth-error">{error}</p>}
+
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="auth-field">
               <label htmlFor="name">Full name</label>
@@ -62,7 +76,7 @@ function Signup({ onSignup }) {
               <input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a password" />
             </div>
             <div className="auth-actions">
-              <Button type="submit" className="w-full">Sign up</Button>
+              <Button type="submit" className="w-full" loading={loading}>Sign up</Button>
               <p className="auth-link">Already have an account? <Link to="/login">Log in</Link></p>
             </div>
           </form>

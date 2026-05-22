@@ -16,6 +16,16 @@ class ApplicationStatus(str, enum.Enum):
     REJECTED = "Rejected"
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
@@ -51,6 +61,7 @@ class Job(Base):
     salary = Column(String, nullable=True)
     job_type = Column(String, nullable=True)
     experience_required = Column(String, nullable=True)
+    job_skills = Column(JSON, nullable=False, default=list)
     scraped_at = Column(DateTime, nullable=True)
     dedup_fingerprint = Column(String, index=True, nullable=True)
     sources_seen = Column(Text, nullable=True)
@@ -174,6 +185,7 @@ class StudentProfile(Base):
     degree_level = Column(String, nullable=False, index=True)
     academic_background = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+    profile_skills = Column(JSON, nullable=False, default=list)
 
 
 

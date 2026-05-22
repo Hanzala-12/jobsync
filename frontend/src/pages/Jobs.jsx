@@ -32,6 +32,15 @@ const resolveExternalJobUrl = (job) => {
   return ''
 }
 
+const normalizeSkillList = (values) => {
+  if (!values) return []
+  const items = Array.isArray(values) ? values : [values]
+  return items
+    .flatMap((item) => String(item || '').split(/[\n,;|•]+/g))
+    .map((item) => item.trim())
+    .filter((item, index, array) => item.length > 1 && array.findIndex((value) => value.toLowerCase() === item.toLowerCase()) === index)
+}
+
 function Jobs() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('software engineer')
@@ -43,7 +52,6 @@ function Jobs() {
   const [error, setError] = useState('')
   const [streamingCount, setStreamingCount] = useState(0)
   const [streamElapsed, setStreamElapsed] = useState(0)
-  const [page, setPage] = useState(1)
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelJob, setPanelJob] = useState(null)
   const [matchData, setMatchData] = useState(null)
@@ -386,7 +394,7 @@ function Jobs() {
         ))}
       </div>
 
-      <div className="pagination">{'<- Previous  Page '}{page}{' of 8  Next ->'}</div>
+      <div className="pagination">{jobs.length > 0 ? `${jobs.length} live results` : 'Run a search to stream live results'}</div>
       <MatchPanel
         open={panelOpen}
         job={panelJob}
@@ -423,24 +431,31 @@ function Jobs() {
                   </div>
                 ) : (
                   <>
+                    <h4>Detected Skills</h4>
+                    <div className="missing-skills-container">
+                      {normalizeSkillList(matchModalResult?.matched_skills).length > 0 ? (
+                        normalizeSkillList(matchModalResult.matched_skills).map((skill, i) => (
+                          <span key={i} className="missing-skill-chip" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#dbeafe' }}>{skill}</span>
+                        ))
+                      ) : (
+                        <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No explicit skills detected</span>
+                      )}
+                    </div>
+
                     <h4>Missing Skills</h4>
                     <div className="missing-skills-container">
-                      {matchModalResult && Array.isArray(matchModalResult.missing_skills) ? (
-                        matchModalResult.missing_skills.length > 0 ? (
-                          matchModalResult.missing_skills.map((s, i) => (
-                            <span key={i} className="missing-skill-chip">{s}</span>
-                          ))
-                        ) : (
-                          // Only show "Perfect Match" when the score is effectively 100%
-                          (matchModalResult.match_percentage !== null && matchModalResult.match_percentage >= 99) ? (
-                            <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
-                          ) : (
-                            // For empty arrays that are not true perfect matches, show a clearer message
-                            <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No detailed analysis available</span>
-                          )
-                        )
+                      {normalizeSkillList(matchModalResult?.missing_skills).length > 0 ? (
+                        normalizeSkillList(matchModalResult.missing_skills).map((s, i) => (
+                          <span key={i} className="missing-skill-chip">{s}</span>
+                        ))
                       ) : (
-                        <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No analysis available</span>
+                        // Only show "Perfect Match" when the score is effectively 100%
+                        (matchModalResult.match_percentage !== null && matchModalResult.match_percentage >= 99) ? (
+                          <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
+                        ) : (
+                          // For empty arrays that are not true perfect matches, show a clearer message
+                          <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No detailed analysis available</span>
+                        )
                       )}
                     </div>
 

@@ -1,7 +1,5 @@
-﻿import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+﻿import { Link, useLocation, useNavigate } from 'react-router-dom'
 import './Layout.css'
-import searchStream from '../services/searchStream'
 
 const jobNavGroups = [
   {
@@ -39,59 +37,90 @@ const jobNavGroups = [
 
 const studyNavGroups = [
   {
-    label: 'STUDY',
+    label: 'STUDY WORKSPACE',
     items: [
-      { path: '/student/dashboard', label: 'University Dashboard' },
-      { path: '/student/profile', label: 'Find Universities' },
-      { path: '/student/matches', label: 'My Matches' },
-      { path: '/student/applications', label: 'My Applications' },
+      { path: '/student/dashboard', label: 'Dashboard' },
+      { path: '/student/profile', label: 'Student Profile' },
+    ],
+  },
+  {
+    label: 'DISCOVER',
+    items: [
+      { path: '/student/search', label: 'University Search' },
+      { path: '/student/matches', label: 'Match Recommendations' },
+      { path: '/student/scholarships', label: 'Scholarships' },
+    ],
+  },
+  {
+    label: 'TRACK',
+    items: [
+      { path: '/student/saved', label: 'Saved Universities' },
+      { path: '/student/applications', label: 'Study Applications' },
     ],
   },
 ]
 
-const Layout = ({ children }) => {
+const Layout = ({ children, studentProfileId = 0, onLogout }) => {
   const location = useLocation()
+  const navigate = useNavigate()
   const mainClass = location.pathname === '/kanban' ? 'app-main app-main-full' : 'app-main'
-  const [studyMode, setStudyMode] = useState(localStorage.getItem('study_mode') === 'true')
-  const [hasStudentProfile, setHasStudentProfile] = useState(Boolean(localStorage.getItem('student_profile_id')))
+  const isStudyRoute = location.pathname.startsWith('/student')
+  const activeMode = isStudyRoute ? 'study' : 'jobs'
 
-  useEffect(() => {
-    const syncState = () => {
-      setStudyMode(localStorage.getItem('study_mode') === 'true')
-      setHasStudentProfile(Boolean(localStorage.getItem('student_profile_id')))
+  const navGroups = activeMode === 'study' ? studyNavGroups : jobNavGroups
+
+  const goToMode = (mode) => {
+    if (mode === 'jobs') {
+      navigate('/')
+      return
     }
-    window.addEventListener('storage', syncState)
-    syncState()
-    return () => window.removeEventListener('storage', syncState)
-  }, [])
 
-  const navGroups = studyMode && hasStudentProfile ? studyNavGroups : jobNavGroups
+    navigate(studentProfileId ? '/student/dashboard' : '/student/profile')
+  }
 
   return (
     <div className="layout-shell">
-      <aside className="sidebar">
-        <div className="logo">
-          <div className="brand-lockup">
-            <div className="brand-mark" aria-hidden="true">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-            </div>
-            <span>JobSync</span>
+      <header className="workspace-header">
+        <div className="brand-lockup">
+          <div className="brand-mark" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
           </div>
+          <div>
+            <span className="workspace-brand">JobSync</span>
+            <p className="workspace-subtitle">Switch between job hunting and study abroad workspaces</p>
+          </div>
+        </div>
+
+        <div className="workspace-tabs" role="tablist" aria-label="Workspace mode">
           <button
             type="button"
-            className="mode-toggle"
-            onClick={() => {
-              const next = !studyMode
-              localStorage.setItem('study_mode', next ? 'true' : 'false')
-              setStudyMode(next)
-            }}
+            className={`workspace-tab ${activeMode === 'jobs' ? 'active' : ''}`}
+            aria-selected={activeMode === 'jobs'}
+            onClick={() => goToMode('jobs')}
           >
-            <span>{studyMode ? 'Study Mode' : 'Job Mode'}</span>
-            <strong>{studyMode ? 'Switch to Jobs' : 'Switch to Study'}</strong>
+            <span>Jobs</span>
+            <strong>Job search</strong>
+          </button>
+          <button
+            type="button"
+            className={`workspace-tab ${activeMode === 'study' ? 'active' : ''}`}
+            aria-selected={activeMode === 'study'}
+            onClick={() => goToMode('study')}
+          >
+            <span>Study</span>
+            <strong>University planning</strong>
           </button>
         </div>
+
+        <button className="logout-btn header-logout" onClick={() => onLogout?.()}>
+          <span aria-hidden="true">→</span>
+          Log out
+        </button>
+      </header>
+
+      <aside className="sidebar">
         <nav>
           {navGroups.map((group) => (
             <div key={group.label} className="nav-group">
@@ -99,27 +128,19 @@ const Layout = ({ children }) => {
               {group.items.map((item) => {
                 const active = location.pathname === item.path
                 return (
-                      <div key={item.path} className={`nav-link-wrap ${active ? 'active' : ''}`}>
-                        {active && <span className="nav-active-bar" aria-hidden="true" />}
-                        <Link to={item.path} className={`nav-link ${active ? 'active' : ''}`}>
-                          {item.label}
-                        </Link>
-                      </div>
+                  <div key={item.path} className={`nav-link-wrap ${active ? 'active' : ''}`}>
+                    {active && <span className="nav-active-bar" aria-hidden="true" />}
+                    <Link to={item.path} className={`nav-link ${active ? 'active' : ''}`}>
+                      {item.label}
+                    </Link>
+                  </div>
                 )
               })}
             </div>
           ))}
 
           <div className="sidebar-footer">
-            <button
-              className="logout-btn"
-              onClick={() => {
-                localStorage.removeItem('auth')
-                localStorage.removeItem('student_profile_id')
-                localStorage.removeItem('study_mode')
-                window.location.reload()
-              }}
-            >
+            <button className="logout-btn" onClick={() => onLogout?.()}>
               <span aria-hidden="true">→</span>
               Log out
             </button>

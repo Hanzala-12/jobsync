@@ -1,0 +1,36 @@
+engine url: postgresql://postgres.ezewzhrmntuxbukcqchq:***@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
+Columns for jobs
+id integer
+source character varying
+external_id character varying
+title character varying
+company character varying
+location character varying
+city character varying
+description text
+url character varying
+apply_url character varying
+posted_date character varying
+salary character varying
+job_type character varying
+experience_required character varying
+scraped_at timestamp without time zone
+dedup_fingerprint character varying
+sources_seen text
+first_seen_at timestamp without time zone
+last_seen_at timestamp without time zone
+possibly_inactive boolean
+is_active boolean
+fetched_at timestamp without time zone
+Columns for student_profiles
+id integer
+gpa double precision
+gre_score integer
+toefl_score integer
+ielts_score double precision
+budget_per_year integer
+preferred_countries json
+intended_major character varying
+degree_level character varying
+academic_background text
+created_at timestamp without time zone

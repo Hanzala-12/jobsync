@@ -69,6 +69,9 @@ function UniversityDetailModal({ open, studentProfileId, matchItem, onClose, onS
 
   const program = selectedProgram || matchItem.program
   const matchAnalysis = match?.analysis || match?.match || {}
+  const matchSummary = matchAnalysis.summary || 'This score is based on the current student profile, program requirements, and cost fit.'
+  const strengths = matchAnalysis.strengths || []
+  const missingRequirements = matchAnalysis.missing_requirements || []
 
   const save = async () => {
     setSaving(true)
@@ -118,6 +121,7 @@ function UniversityDetailModal({ open, studentProfileId, matchItem, onClose, onS
                 <p className="section-label">Match Score</p>
                 <p className="match-score-large">{matchAnalysis.match_score || match?.match_score || 0}%</p>
                 <p className="muted-small">Academic {matchAnalysis.academic_fit || 0} · Budget {matchAnalysis.budget_fit || 0} · Location {matchAnalysis.location_fit || 0}</p>
+                <p className="muted-small" style={{ marginTop: 8 }}>{matchSummary}</p>
               </div>
               <div className="study-panel">
                 <p className="section-label">University facts</p>
@@ -200,11 +204,11 @@ function UniversityDetailModal({ open, studentProfileId, matchItem, onClose, onS
                 <div className="detail-list">
                   <div className="detail-card">
                     <strong>Strengths</strong>
-                    <ul className="bullet-list">{(matchAnalysis.strengths || []).map((item) => <li key={item}>{item}</li>)}</ul>
+                    <ul className="bullet-list">{strengths.map((item) => <li key={item}>{item}</li>)}</ul>
                   </div>
                   <div className="detail-card">
                     <strong>Missing requirements</strong>
-                    <ul className="bullet-list">{(matchAnalysis.missing_requirements || []).map((item) => <li key={item}>{item}</li>)}</ul>
+                    <ul className="bullet-list">{missingRequirements.map((item) => <li key={item}>{item}</li>)}</ul>
                   </div>
                   <div className="detail-card">
                     <strong>Recommendations</strong>

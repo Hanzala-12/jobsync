@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -11,6 +12,7 @@ from sqlalchemy import inspect
 
 from backend.database import get_db, engine
 from backend.models import Job, UserPreference, UserProfile
+from backend.security import require_current_user
 try:
     from ingest import chunk_text
 except Exception:
@@ -33,7 +35,7 @@ ALLOWED_RESUME_MIME_TYPES = {
 }
 ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx"}
 
-router = APIRouter(tags=["Profile"])
+router = APIRouter(tags=["Profile"], dependencies=[Depends(require_current_user)])
 _preferences_table_ready = False
 
 
@@ -486,15 +488,20 @@ def match_job_api(job_id: int, db: Session = Depends(get_db)):
         client = None
     if client is None:
         raise HTTPException(status_code=503, detail="LLM provider is unavailable")
-    completion = client.chat.completions.create(
-        model=os.getenv('OPENROUTER_MODEL', 'gpt-4o-mini'),
-        messages=[{"role": "system", "content": "You are a hiring expert."}, {"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=400,
-    )
-    text = completion.choices[0].message.content
-    data = _extract_json(text, {"match_score": 0, "missing_skills": [], "explanation": ""})
-    return data
+    try:
+        completion = client.chat.completions.create(
+            model=os.getenv('OPENROUTER_MODEL', 'gpt-4o-mini'),
+            messages=[{"role": "system", "content": "You are a hiring expert."}, {"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=400,
+        )
+        text = completion.choices[0].message.content
+        data = _extract_json(text, {"match_score": 0, "missing_skills": [], "explanation": ""})
+        return data
+    except Exception as exc:
+        logging.exception("LLM match_job_api failed; returning fallback match score: %s", exc)
+        # Safe fallback: return low-confidence match with empty skills/explanation
+        return {"match_score": 0, "missing_skills": [], "explanation": "LLM provider unavailable; fallback response"}
 
 
 @router.post('/build_resume/{job_id}')
@@ -514,14 +521,22 @@ def build_resume_api(job_id: int, db: Session = Depends(get_db)):
         client = None
     if client is None:
         raise HTTPException(status_code=503, detail="LLM provider is unavailable")
-    completion = client.chat.completions.create(
-        model=os.getenv('OPENROUTER_MODEL', 'gpt-4o-mini'),
-        messages=[{"role": "system", "content": "You are a resume-writing assistant."}, {"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=900,
-    )
-    resume_text = completion.choices[0].message.content.strip()
-    return {"resume_text": resume_text}
+    try:
+        completion = client.chat.completions.create(
+            model=os.getenv('OPENROUTER_MODEL', 'gpt-4o-mini'),
+            messages=[{"role": "system", "content": "You are a resume-writing assistant."}, {"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=900,
+        )
+        resume_text = completion.choices[0].message.content.strip()
+        return {"resume_text": resume_text}
+    except Exception as exc:
+        logging.exception("LLM build_resume_api failed; returning fallback resume: %s", exc)
+        # Fallback: return the user's profile_text as a minimal resume
+        fallback = (profile_text or "").strip()
+        if not fallback:
+            fallback = "Unable to generate resume at this time."
+        return {"resume_text": fallback}
 
 
 @router.post('/cover_letter/{job_id}')

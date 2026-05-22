@@ -31,6 +31,8 @@ from scrapers.rozee_scraper import ROZEE_USER_AGENT, BASE_URL
 from core.deduplicator import process_incoming_job
 from core.llm_provider import LLMProvider
 from core.normalizer import normalize_job
+from core.skill_extractor import extract_skills
+from core.match_explainer import explain_match_for
 # lazy import RAG functions inside _upsert_jobs to avoid heavy startup imports
 from backend.database import engine
 
@@ -96,6 +98,97 @@ def _extract_json(response: str, fallback):
             pass
 
     return fallback
+
+
+def _normalize_skill_list(values) -> List[str]:
+    if values is None:
+        return []
+
+    if isinstance(values, str):
+        raw_values = re.split(r"[\n,;|•]+", values)
+    elif isinstance(values, (list, tuple, set)):
+        raw_values = list(values)
+    else:
+        raw_values = [values]
+
+    cleaned: List[str] = []
+    seen = set()
+    for item in raw_values:
+        skill = re.sub(r"\s+", " ", str(item or "")).strip(" -:\t\r\n")
+        if len(skill) <= 1:
+            continue
+        lowered = skill.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        cleaned.append(skill)
+    return cleaned
+
+
+def _extract_skills_from_text(text: str, limit: int = 12) -> List[str]:
+    source = (text or "").lower()
+    skill_patterns = [
+        ("Python", r"\bpython\b"),
+        ("JavaScript", r"\bjavascript\b|\bjs\b"),
+        ("TypeScript", r"\btypescript\b|\bts\b"),
+        ("React", r"\breact\b"),
+        ("Node.js", r"\bnode(?:\.js)?\b"),
+        ("Django", r"\bdjango\b"),
+        ("Flask", r"\bflask\b"),
+        ("FastAPI", r"\bfastapi\b"),
+        ("REST APIs", r"\brest\s+api(?:s)?\b|\bapi(?:s)?\b"),
+        ("SQL", r"\bsql\b"),
+        ("PostgreSQL", r"\bpostgres(?:ql)?\b"),
+        ("MySQL", r"\bmysql\b"),
+        ("MongoDB", r"\bmongodb\b"),
+        ("HTML", r"\bhtml\b"),
+        ("CSS", r"\bcss\b"),
+        ("Tailwind CSS", r"\btailwind(?: css)?\b"),
+        ("Git", r"\bgit\b"),
+        ("Docker", r"\bdocker\b"),
+        ("Kubernetes", r"\bkubernetes\b|\bk8s\b"),
+        ("AWS", r"\baws\b|amazon web services"),
+        ("Azure", r"\bazure\b"),
+        ("Machine Learning", r"\bmachine learning\b"),
+        ("Deep Learning", r"\bdeep learning\b"),
+        ("Data Analysis", r"\bdata analysis\b"),
+        ("Data Science", r"\bdata science\b"),
+        ("Pandas", r"\bpandas\b"),
+        ("NumPy", r"\bnumpy\b"),
+        ("Testing", r"\btesting\b|\btest automation\b|\bqa\b|\bselenium\b|\bpytest\b"),
+        ("Communication", r"\bcommunication\b"),
+        ("Teamwork", r"\bteamwork\b|\bcollaboration\b"),
+        ("Problem Solving", r"\bproblem solving\b|\bproblem-solving\b"),
+        ("Agile", r"\bagile\b|\bscrum\b"),
+    ]
+
+    extracted: List[str] = []
+    for label, pattern in skill_patterns:
+        if re.search(pattern, source):
+            extracted.append(label)
+
+    if not extracted:
+        fallback_tokens = []
+        token_counts: Dict[str, int] = {}
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9+.#-]{2,}", source):
+            if token in {"and", "for", "the", "with", "that", "this", "from", "your", "you", "are", "have", "will", "our", "their", "job", "role", "skills", "skill", "experience", "team", "work", "strong", "good", "knowledge", "ability", "required", "requirements"}:
+                continue
+            token_counts[token] = token_counts.get(token, 0) + 1
+        ranked = sorted(token_counts.items(), key=lambda item: (-item[1], item[0]))
+        fallback_tokens = [token for token, _ in ranked[:limit]]
+        extracted = [token.replace(".", " ").strip().title() for token in fallback_tokens if token.strip()]
+
+    cleaned: List[str] = []
+    seen = set()
+    for skill in extracted:
+        lowered = skill.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        cleaned.append(skill)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
 
 
 def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
@@ -337,53 +430,64 @@ def match_job(job_id: int, db: Session = Depends(get_db)):
     if not profile or not profile.resume_text:
         return JobMatch(job_id=job_id, match_percentage=0, explanation="Upload resume first", missing_skills=[])
 
-    prompt = f"""Compare the resume with the job description.
-Resume: {profile.resume_text[:2000]}
-Job Description: {job.description[:2000]}
-Give:
-- Match percentage (0-100)
-- Explanation (why this score)
-- List missing skills
-Respond as JSON: {{"percentage": number, "explanation": "string", "missing_skills": ["..."]}}"""
+    resume_text = profile.resume_text or ""
+    job_text = job.description or ""
 
-    llm = LLMProvider()
-    # If no LLM provider is configured, use a simple local heuristic based on
-    # keyword overlap so Match still works offline.
-    if not getattr(llm, 'provider_type', None):
+    # Prefer stored skill arrays if present, otherwise extract on the fly
+    job_skills = (getattr(job, "job_skills", None) or [])
+    if not job_skills:
+        job_skills = extract_skills(job_text, limit=50)
+
+    profile_skills = (getattr(profile, "profile_skills", None) or [])
+    if not profile_skills:
+        profile_skills = extract_skills(resume_text, limit=50)
+
+    try:
+        explain = explain_match_for(
+            {
+                "id": job.id,
+                "description": job_text,
+                "experience_required": job.experience_required,
+                "job_skills": job_skills,
+            },
+            {
+                "id": profile.id,
+                "resume_text": resume_text,
+                "profile_skills": profile_skills,
+            },
+        )
+
+        explanation_text = (
+            f"Skills matched: {', '.join(explain.get('matching_skills') or [])}. "
+            f"Missing: {', '.join(explain.get('missing_skills') or [])}. "
+            f"{explain.get('experience_fit')}"
+        )
+
+        return JobMatch(
+            job_id=job_id,
+            match_percentage=float(explain.get("match_score", 0)),
+            explanation=explanation_text,
+            matched_skills=explain.get("matching_skills", []),
+            missing_skills=explain.get("missing_skills", []),
+        )
+    except Exception:
+        # Fallback to lightweight heuristic as before
         import re as _re
 
         def _words(text: str):
             return set([w for w in _re.findall(r"[a-zA-Z0-9+#.+]+", (text or "").lower()) if len(w) > 2])
 
-        profile = db.query(UserProfile).first()
-        resume_text = profile.resume_text if profile and profile.resume_text else ""
         resume_words = _words(resume_text)
-        job_words = _words(job.description or "")
+        job_words = _words(job_text)
         if not job_words:
-            return JobMatch(job_id=job_id, match_percentage=0.0, explanation="No job description text to analyze", missing_skills=[])
+            return JobMatch(job_id=job_id, match_percentage=0.0, explanation="No job description text to analyze", matched_skills=[], missing_skills=[])
 
         overlap = resume_words & job_words
         match_pct = int(min(100, (len(overlap) / max(1, len(job_words))) * 100))
         missing = sorted(list((job_words - resume_words)))[:12]
+        matched = sorted(list(overlap))[:12]
         explanation = f"Heuristic match based on keyword overlap: {len(overlap)} of {len(job_words)} job keywords found in resume."
-        return JobMatch(job_id=job_id, match_percentage=float(match_pct), explanation=explanation, missing_skills=missing)
-
-    raw = llm.ask("You are a hiring expert.", prompt)
-    # If the provider returned an explicit error string, propagate it as a 503
-    if isinstance(raw, str) and raw.startswith("AI error:"):
-        raise HTTPException(status_code=503, detail=raw.replace("AI error:", "").strip() or "AI provider unavailable")
-
-    data = _extract_json(
-        raw,
-        {"percentage": 0, "explanation": "Failed to parse AI response", "missing_skills": []},
-    )
-
-    return JobMatch(
-        job_id=job_id,
-        match_percentage=float(data.get("percentage", 0)),
-        explanation=str(data.get("explanation", "")),
-        missing_skills=[str(skill) for skill in (data.get("missing_skills") or [])],
-    )
+        return JobMatch(job_id=job_id, match_percentage=float(match_pct), explanation=explanation, matched_skills=matched, missing_skills=missing)
 
 
 @router.post("/upsert", response_model=JobOut)

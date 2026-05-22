@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Application, ApplicationStatus, ResumeVersion, UserProfile
+from backend.security import require_current_user
 from backend.schemas import (
     ApplicationCreate,
     ApplicationOut,
@@ -14,7 +15,7 @@ from backend.schemas import (
     StatusUpdate,
 )
 
-router = APIRouter(prefix="/applications", tags=["Applications"])
+router = APIRouter(prefix="/applications", tags=["Applications"], dependencies=[Depends(require_current_user)])
 
 
 def _calculate_streak(applications: List[Application]) -> int:

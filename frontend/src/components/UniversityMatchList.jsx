@@ -13,7 +13,7 @@ function scoreClass(score) {
   return 'bad'
 }
 
-function UniversityMatchList({ profileId, heading = 'University Matches', initialLimit = PAGE_SIZE, showFilters = true, onResultsLoaded }) {
+function UniversityMatchList({ profileId, heading = 'University Matches', initialLimit = PAGE_SIZE, showFilters = true, initialFilters = {}, onResultsLoaded }) {
   const [results, setResults] = useState([])
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -23,6 +23,7 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
     filter_max_tuition: '',
     filter_scholarship_only: false,
     sort_by: 'match_score',
+    ...initialFilters,
   })
   const [rankingRange, setRankingRange] = useState({ min: '', max: '' })
   const [selected, setSelected] = useState(null)
@@ -50,7 +51,11 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
         if (maxRanking !== null && ranking && ranking < maxRanking) return false
         return true
       })
-      setResults(filtered)
+      setResults((prev) => {
+        if (nextPage === 1) return filtered
+        const nextItems = filtered.slice(prev.length)
+        return [...prev, ...nextItems]
+      })
       onResultsLoaded?.(filtered)
     } catch (err) {
       setError(err.userMessage || 'No matches could be loaded')
@@ -93,7 +98,7 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
     }
   }
 
-  const visibleResults = useMemo(() => results.slice(0, Math.max(1, page * initialLimit)), [results, page, initialLimit])
+  const visibleResults = useMemo(() => results, [results])
 
   if (!profileId) {
     return (
@@ -175,6 +180,7 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
                 {visibleResults.map((item) => {
                   const ranking = item.university.ranking_global || item.program.ranking_global || item.university.ranking || 'N/A'
                   const score = item.match.match_score || 0
+                  const summary = item.match.summary || item.match.recommendations?.[0] || 'A higher score means the program fits your profile, budget, and location preferences more closely.'
                   return (
                     <article className="match-card" key={item.program.id}>
                       <div className="match-card-top">
@@ -190,6 +196,7 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
                         <span className="tag-pill"><Star size={14} /> {item.program.scholarship_available ? 'Scholarship' : 'No scholarship'}</span>
                         <span className="tag-pill"><Bookmark size={14} /> {item.vector_similarity}% vector fit</span>
                       </div>
+                      <p className="muted-small" style={{ marginTop: 10 }}>{summary}</p>
                       <div className="button-row" style={{ marginTop: 14 }}>
                         <Button onClick={() => setSelected(item)}>View Details</Button>
                         <Button variant="secondary" onClick={() => saveItem(item)}>Save</Button>
@@ -211,7 +218,7 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
             <div ref={sentinelRef} />
             <div className="modal-actions" style={{ marginTop: 16 }}>
               <Button variant="secondary" disabled={page === 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>Previous</Button>
-              <Button variant="secondary" onClick={() => setPage((prev) => prev + 1)}>Load More</Button>
+              <Button variant="secondary" loading={loading} onClick={() => setPage((prev) => prev + 1)}>Load More</Button>
             </div>
             {compareItems.length > 0 && (
               <div className="compare-grid" style={{ marginTop: 18 }}>

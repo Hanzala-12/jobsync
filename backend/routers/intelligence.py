@@ -5,6 +5,7 @@ from backend.schemas import SkillGapRequest, SkillGapResponse, InterviewPrepRequ
 from core.llm_provider import LLMProvider
 from backend.models import UserProfile
 import json
+import logging
 
 router = APIRouter(prefix="/intelligence", tags=["Intelligence"])
 
@@ -26,7 +27,9 @@ Return JSON: {{"missing_skills": ["skill1", "skill2"], "frequency": {{"skill1": 
         data = json.loads(response)
         return SkillGapResponse(**data)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Failed to parse skill gap analysis response")
+        logging.exception("Failed to parse skill gap analysis response: %s", exc)
+        # Graceful fallback: return empty skill gap analysis
+        return SkillGapResponse(missing_skills=[], frequency={})
 
 @router.post("/interview-prep", response_model=InterviewPrepResponse)
 def interview_prep(req: InterviewPrepRequest, db: Session = Depends(get_db)):
@@ -41,4 +44,6 @@ Return JSON: {{"questions": [{{"question": "...", "suggested_answer": "..."}}]}}
         questions = [InterviewQuestion(**q) for q in data["questions"]]
         return InterviewPrepResponse(questions=questions)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Failed to parse interview prep questions")
+        logging.exception("Failed to parse interview prep questions: %s", exc)
+        # Fallback: return no questions
+        return InterviewPrepResponse(questions=[])

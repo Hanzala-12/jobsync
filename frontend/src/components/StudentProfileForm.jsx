@@ -7,7 +7,7 @@ import './UniversityModule.css'
 const DEGREE_OPTIONS = ['Bachelors', 'Masters', 'PhD']
 const FALLBACK_COUNTRIES = ['Malaysia', 'Singapore', 'Germany', 'Japan', 'South Korea', 'China', 'India', 'United Kingdom', 'United States']
 
-function StudentProfileForm() {
+function StudentProfileForm({ onCreated }) {
   const navigate = useNavigate()
   const [loadingOptions, setLoadingOptions] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -87,11 +87,8 @@ function StudentProfileForm() {
       const response = await studentAPI.createProfile(payload)
       const profileId = response.data?.id
       if (profileId) {
-        localStorage.setItem('student_profile_id', String(profileId))
-        window.dispatchEvent(new Event('storage'))
+        onCreated?.(profileId)
       }
-      localStorage.setItem('study_mode', 'true')
-      window.dispatchEvent(new Event('storage'))
       navigate('/student/dashboard')
     } catch (err) {
       setError(err.userMessage || 'Failed to create student profile')
