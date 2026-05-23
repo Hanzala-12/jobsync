@@ -19,4 +19,5 @@ ENABLE_JOB_SCRAPING = os.getenv("ENABLE_JOB_SCRAPING", "true").lower() in {"1", 
 ENABLE_UNIVERSITY_SCRAPING = os.getenv("ENABLE_UNIVERSITY_SCRAPING", "true").lower() in {"1", "true", "yes"}
 
 # Other
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+ENV = os.getenv("ENV", os.getenv("ENVIRONMENT", "development"))
+ENVIRONMENT = ENV

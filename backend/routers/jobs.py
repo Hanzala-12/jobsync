@@ -25,7 +25,17 @@ from backend.schemas import (
     SalaryEstimateRequest,
     SalaryEstimateResponse,
 )
-from backend.services.job_apis import clean_text, get_pakistan_source_status, search_jobs
+from backend.services.job_apis import (
+    clean_text,
+    fetch_bing_pakistan,
+    fetch_brightspyre,
+    fetch_company_careers,
+    fetch_linkedin_indexed,
+    fetch_mustakbil_pakistan,
+    fetch_rozee_pakistan,
+    get_pakistan_source_status,
+    search_jobs,
+)
 import requests
 from scrapers.rozee_scraper import ROZEE_USER_AGENT, BASE_URL
 from core.deduplicator import process_incoming_job
@@ -35,6 +45,7 @@ from core.skill_extractor import extract_skills
 from core.match_explainer import explain_match_for
 # lazy import RAG functions inside _upsert_jobs to avoid heavy startup imports
 from backend.database import engine
+from backend.security import get_current_user, get_current_user_from_stream
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 _logger = logging.getLogger(__name__)
@@ -193,8 +204,7 @@ def _extract_skills_from_text(text: str, limit: int = 12) -> List[str]:
 
 def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
     saved_jobs: List[Job] = []
-    profile = db.query(UserProfile).first()
-    resume_summary = profile.resume_text[:1500] if profile and profile.resume_text else ""
+    resume_summary = ""
 
     cover_enabled = os.getenv("ENABLE_JOB_ARTIFACTS", "false").lower() in {"1", "true", "yes"}
     if cover_enabled:
@@ -236,6 +246,24 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
                 _logger.warning("Cover letter generation enabled but background threading unavailable; generation may block search responses.")
 
     return saved_jobs
+
+
+def _refresh_job_search_query(db: Session, query: str, city: Optional[str], sort: str):
+    search_query = db.query(Job).filter(Job.is_active == True)
+    if query:
+        term = f"%{query.lower()}%"
+        search_query = search_query.filter(
+            (func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term))
+        )
+    if city:
+        search_query = search_query.filter(func.lower(Job.city) == city.strip().lower())
+
+    if sort == "newest":
+        search_query = search_query.order_by(Job.scraped_at.desc().nullslast(), Job.fetched_at.desc().nullslast())
+    else:
+        search_query = search_query.order_by(Job.fetched_at.desc().nullslast())
+
+    return search_query
 
 
 def _log_background_future_error(future):
@@ -284,23 +312,18 @@ def search_jobs_endpoint(
     sort: str = "newest",
     db: Session = Depends(get_db),
 ):
-    # Database-only search: do not perform live scraping during user requests.
+    live_jobs = search_jobs(
+        query=query,
+        location=location,
+        city=city,
+        remote_only=remote_only,
+        country_code=country_code,
+        pakistan_only=pakistan_only,
+    )
+    if live_jobs:
+        _upsert_jobs(db, live_jobs)
 
-    # Build base query
-    q = db.query(Job).filter(Job.is_active == True)
-    if query:
-        term = f"%{query.lower()}%"
-        q = q.filter(
-            (func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term))
-        )
-    if city:
-        q = q.filter(func.lower(Job.city) == city.strip().lower())
-
-    if sort == "newest":
-        q = q.order_by(Job.scraped_at.desc().nullslast(), Job.fetched_at.desc().nullslast())
-    else:
-        q = q.order_by(Job.fetched_at.desc().nullslast())
-
+    q = _refresh_job_search_query(db, query=query, city=city, sort=sort)
     total = q.count()
     page = max(1, page)
     limit = max(1, min(100, limit))
@@ -393,24 +416,104 @@ def search_jobs_stream(
     pakistan_only: bool = False,
     country_code: str = 'pk',
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_stream),
 ):
+    import time as _time
+
+    def _job_payload(j):
+        return {
+            "id": j.id,
+            "title": j.title,
+            "company": j.company,
+            "description": j.description,
+            "source": j.source,
+            "url": j.url,
+            "location": j.location,
+            "salary": j.salary,
+            "posted_date": j.posted_date,
+        }
+
+    def _emit(event: dict):
+        return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
     def event_stream():
-        q = db.query(Job).filter(Job.is_active == True)
-        if query:
-            term = f"%{query.lower()}%"
-            q = q.filter((func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term)))
-        items = q.order_by(Job.scraped_at.desc().nullslast()).limit(100).all()
-        for j in items:
-            payload = {
-                "id": j.id,
-                "title": j.title,
-                "company": j.company,
-                "description": j.description,
-                "source": j.source,
-                "url": j.url,
+        start_time = _time.time()
+        yield _emit({"status": "searching", "combined_count": 0, "elapsed": 0.0, "partial": []})
+
+        def _source_calls():
+            location_key = (location or "").strip().lower()
+            selected_remote = remote_only or location_key == "remote"
+
+            if selected_remote:
+                return {
+                    "remotive": lambda: [],
+                    "jobicy": lambda: [],
+                }
+
+            source_map = {
+                "rozee": lambda: fetch_rozee_pakistan(query, city or location, 1),
+                "mustakbil": lambda: fetch_mustakbil_pakistan(query, city or location, 1),
+                "bing": lambda: fetch_bing_pakistan(query, city or location, 1),
+                "linkedin": lambda: fetch_linkedin_indexed(query, city or location, 4),
+                "careers": lambda: fetch_company_careers(query, 6),
+                "brightspyre": lambda: fetch_brightspyre(query, 1),
             }
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        yield f"event: done\ndata: {json.dumps({'total': len(items)})}\n\n"
+
+            if location_key in {"karachi", "lahore", "islamabad", "rawalpindi", "faisalabad", "pakistan"} or pakistan_only or country_code.lower() == "pk":
+                return source_map
+
+            return {
+                "rozee": lambda: fetch_rozee_pakistan(query, None, 1),
+                "mustakbil": lambda: fetch_mustakbil_pakistan(query, None, 1),
+                "bing": lambda: fetch_bing_pakistan(query, None, 1),
+                "linkedin": lambda: fetch_linkedin_indexed(query, location or None, 4),
+                "careers": lambda: fetch_company_careers(query, 6),
+                "brightspyre": lambda: fetch_brightspyre(query, 1),
+            }
+
+        source_calls = _source_calls()
+        if not source_calls:
+            source_calls = {"fallback": lambda: search_jobs(query=query, location=location, city=city, remote_only=remote_only, country_code=country_code, pakistan_only=pakistan_only)}
+
+        completed_jobs: List[Job] = []
+        chunk_count = 0
+
+        with ThreadPoolExecutor(max_workers=min(len(source_calls), 6) or 1) as executor:
+            futures = {executor.submit(call): name for name, call in source_calls.items()}
+            for future in concurrent.futures.as_completed(futures):
+                source_name = futures[future]
+                try:
+                    source_jobs = future.result(timeout=0)
+                except Exception as exc:
+                    _logger.warning("search source failed: %s (%s)", source_name, exc)
+                    source_jobs = []
+
+                if not source_jobs and source_name == "fallback":
+                    source_jobs = search_jobs(
+                        query=query,
+                        location=location,
+                        city=city,
+                        remote_only=remote_only,
+                        country_code=country_code,
+                        pakistan_only=pakistan_only,
+                    )
+
+                if not source_jobs:
+                    elapsed = round(_time.time() - start_time, 1)
+                    yield _emit({"partial": [], "source": source_name, "combined_count": chunk_count, "elapsed": elapsed})
+                    continue
+
+                saved_jobs = _upsert_jobs(db, source_jobs)
+                completed_jobs.extend(saved_jobs)
+                chunk = [_job_payload(j) for j in saved_jobs]
+                chunk_count += len(chunk)
+                elapsed = round(_time.time() - start_time, 1)
+                yield _emit({"partial": chunk, "source": source_name, "combined_count": chunk_count, "elapsed": elapsed})
+
+        final_query = _refresh_job_search_query(db, query=query, city=city, sort="newest")
+        final_items = final_query.limit(100).all()
+        final_payloads = [_job_payload(j) for j in final_items]
+        yield _emit({"done": True, "results": final_payloads, "total": len(final_payloads), "elapsed": round(_time.time() - start_time, 1)})
 
     return StreamingResponse(event_stream(), media_type='text/event-stream')
 
@@ -421,12 +524,12 @@ def sources_status():
 
 
 @router.get("/{job_id}/match", response_model=JobMatch)
-def match_job(job_id: int, db: Session = Depends(get_db)):
+def match_job(job_id: int, current_user = Depends(get_current_user), db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         return JobMatch(job_id=job_id, match_percentage=0, explanation="Job not found", missing_skills=[])
 
-    profile = db.query(UserProfile).first()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     if not profile or not profile.resume_text:
         return JobMatch(job_id=job_id, match_percentage=0, explanation="Upload resume first", missing_skills=[])
 

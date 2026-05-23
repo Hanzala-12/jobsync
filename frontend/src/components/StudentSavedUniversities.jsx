@@ -20,7 +20,8 @@ function StudentSavedUniversities({ profileId }) {
     setError('')
     try {
       const response = await studentAPI.getSavedUniversities(profileId)
-      setItems(response.data || [])
+      const d = response.data
+      setItems(Array.isArray(d) ? d : (d?.saved || d?.data || []))
     } catch (err) {
       setError(err.userMessage || 'Could not load saved universities')
       setItems([])

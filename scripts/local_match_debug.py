@@ -16,11 +16,11 @@ def main():
             print('No student profiles found')
             return
         print('Using student profile id:', profile.id)
-        candidates = retrieve_similar_programs(profile.id, limit=5, db=db)
+        candidates = retrieve_similar_programs(profile.id, profile.user_id, limit=5, db=db)
         print('Candidates count:', len(candidates))
         for i, c in enumerate(candidates[:5], 1):
             print(f'Candidate {i}: program_id={c.get("program_id")}, vector_similarity={c.get("vector_similarity")}')
-            match = get_match_for_program(profile.id, int(c.get('program_id')), db)
+            match = get_match_for_program(profile.id, int(c.get('program_id')), profile.user_id, db)
             print('Match keys:', list(match.keys()))
             print('Match id:', match.get('id'))
             print('---')

@@ -4,19 +4,21 @@ Follow-up Agent - Automated follow-up reminders and drafts
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from core.database import get_db
-from backend.models import Application, ApplicationStatus
+from backend.models import Application, ApplicationStatus, User
 from core.llm_provider import LLMProvider
 from datetime import datetime, timedelta
+from backend.security import get_current_user
 
 router = APIRouter(prefix="/followup", tags=["Follow-Up"])
 
 @router.get("/check")
-def check_followups(db: Session = Depends(get_db)):
+def check_followups(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Check for stale applications and generate follow-up drafts"""
     cutoff = datetime.now() - timedelta(days=5)
     
     # Find applications that need follow-up
     stale_apps = db.query(Application).filter(
+        Application.user_id == current_user.id,
         Application.status == ApplicationStatus.APPLIED.value,
         Application.applied_date <= cutoff
     ).all()
@@ -58,9 +60,9 @@ Keep it concise and professional."""
     }
 
 @router.post("/send/{app_id}")
-def mark_followup_sent(app_id: int, db: Session = Depends(get_db)):
+def mark_followup_sent(app_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Mark follow-up as sent and update application"""
-    app = db.query(Application).filter(Application.id == app_id).first()
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")

@@ -1,0 +1,28 @@
+node_modules
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.local
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+*.db
+*.sqlite
+chroma_db/
+outputs/
+inputs/
+logs/
+*.log
+
+# Frontend build artifacts
+frontend/node_modules
+frontend/dist
+frontend/build
+
+# IDE
+.vscode/
+.idea/

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Button from '../components/Button'
 import { coverLetterAPI } from '../api/client'
+import { FileText, Copy, Download, RefreshCw } from 'lucide-react'
 import './CoverLetter.css'
 
 const tones = ['Professional', 'Enthusiastic', 'Concise']
@@ -56,47 +57,76 @@ function CoverLetter() {
   }
 
   return (
-    <div className="cover-page">
+    <div className="cover-page fade-up">
       <div className="page-header">
-        <h1>Cover Letter</h1>
-        <p className="subtitle">Generate tailored letters with clean formatting.</p>
+        <h1>Cover Letter Generator</h1>
+        <p className="subtitle">Craft tailored, professional cover letters instantly based on specific job descriptions.</p>
       </div>
 
       <div className="cover-grid">
-        <section className="panel">
-          <input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="Job Title" />
-          <input value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Company" />
+        <section className="panel-card fade-up">
+          <span className="field-label">JOB TITLE</span>
+          <input 
+            className="text-area" 
+            style={{ marginBottom: 16 }}
+            value={jobTitle} 
+            onChange={(event) => setJobTitle(event.target.value)} 
+            placeholder="e.g. Senior Frontend Engineer" 
+          />
+          
+          <span className="field-label">COMPANY</span>
+          <input 
+            className="text-area" 
+            style={{ marginBottom: 16 }}
+            value={company} 
+            onChange={(event) => setCompany(event.target.value)} 
+            placeholder="e.g. Acme Corp" 
+          />
+          
+          <span className="field-label">JOB DESCRIPTION</span>
           <textarea
-            rows={13}
+            className="text-area"
+            rows={10}
             value={jobDescription}
             onChange={(event) => setJobDescription(event.target.value)}
-            placeholder="Job Description"
+            placeholder="Paste the full job description here..."
+            style={{ marginBottom: 16 }}
           />
+          
+          <span className="field-label">TONE AND STYLE</span>
           <div className="tone-row">
             {tones.map((item) => (
-              <button key={item} className={tone === item ? 'tone active' : 'tone'} onClick={() => setTone(item)}>
+              <button key={item} className={`tone-btn ${tone === item ? 'active' : ''}`} onClick={() => setTone(item)}>
                 {item}
               </button>
             ))}
           </div>
-          <Button onClick={generate} loading={loading}>Generate</Button>
+          <Button className="w-full" onClick={generate} loading={loading}>Generate Cover Letter</Button>
         </section>
 
-        <section className="panel">
+        <section className="panel-card fade-up" style={{ animationDelay: '0.1s' }}>
           {!draft ? (
-            <p className="empty">Generated letter appears here.</p>
+            <div className="empty-results">
+              <FileText size={32} />
+              <p>Your generated letter will appear here.</p>
+            </div>
           ) : (
-            <>
-              <article className="letter-box">
-                <p>{draft}</p>
-              </article>
-              <p className="meta">{wordCount} words · {readingTime} min read</p>
-              <div className="actions">
-                <Button variant="secondary" onClick={copyDraft}>Copy</Button>
-                <Button variant="secondary" onClick={downloadDraft}>Download</Button>
-                <button type="button" className="regen" onClick={generate}>Regenerate</button>
+            <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <span className="field-label">GENERATED DRAFT</span>
+              <div className="letter-content">{draft}</div>
+              
+              <div className="letter-meta">
+                {wordCount} words • Est. {readingTime} min read
               </div>
-            </>
+              
+              <div className="letter-actions">
+                <div>
+                  <button className="icon-btn-text" onClick={copyDraft}><Copy size={14} /> Copy Document</button>
+                  <button className="icon-btn-text" onClick={downloadDraft}><Download size={14} /> Download</button>
+                </div>
+                <button type="button" className="regen-btn" onClick={generate}><RefreshCw size={12} style={{ display: 'inline', marginRight: 4 }}/>Regenerate</button>
+              </div>
+            </div>
           )}
         </section>
       </div>

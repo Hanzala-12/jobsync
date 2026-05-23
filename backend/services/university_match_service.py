@@ -261,11 +261,11 @@ def _student_similarity_score(student_profile: StudentProfile, program: Program,
     return score
 
 
-def retrieve_similar_programs(student_id: int, limit: int = 20, db: Optional[Session] = None) -> List[Dict[str, Any]]:
+def retrieve_similar_programs(student_id: int, user_id: int, limit: int = 20, db: Optional[Session] = None) -> List[Dict[str, Any]]:
     if db is None:
         raise ValueError("db session is required")
 
-    student_profile = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
+    student_profile = db.query(StudentProfile).filter(StudentProfile.id == student_id, StudentProfile.user_id == user_id).first()
     if not student_profile:
         raise ValueError("Student profile not found")
 
@@ -552,10 +552,11 @@ def _serialize_match_row(row: StudentProgramMatch, student_profile: StudentProfi
     }
 
 
-def _find_cached_match(db: Session, student_id: int, program_id: int) -> Optional[StudentProgramMatch]:
+def _find_cached_match(db: Session, user_id: int, student_id: int, program_id: int) -> Optional[StudentProgramMatch]:
     return (
         db.query(StudentProgramMatch)
         .filter(
+            StudentProgramMatch.user_id == user_id,
             StudentProgramMatch.student_id == student_id,
             StudentProgramMatch.program_id == program_id,
             StudentProgramMatch.expires_at > _now(),
@@ -564,11 +565,11 @@ def _find_cached_match(db: Session, student_id: int, program_id: int) -> Optiona
     )
 
 
-def _upsert_match_row(db: Session, student_id: int, program_id: int, analysis: Dict[str, Any]) -> StudentProgramMatch:
-    row = db.query(StudentProgramMatch).filter(StudentProgramMatch.student_id == student_id, StudentProgramMatch.program_id == program_id).first()
+def _upsert_match_row(db: Session, user_id: int, student_id: int, program_id: int, analysis: Dict[str, Any]) -> StudentProgramMatch:
+    row = db.query(StudentProgramMatch).filter(StudentProgramMatch.user_id == user_id, StudentProgramMatch.student_id == student_id, StudentProgramMatch.program_id == program_id).first()
     expires_at = _now() + timedelta(days=MATCH_CACHE_TTL_DAYS)
     if row is None:
-        row = StudentProgramMatch(student_id=student_id, program_id=program_id, expires_at=expires_at)
+        row = StudentProgramMatch(user_id=user_id, student_id=student_id, program_id=program_id, expires_at=expires_at)
         db.add(row)
 
     row.match_score = int(analysis["match_score"])
@@ -586,10 +587,11 @@ def _upsert_match_row(db: Session, student_id: int, program_id: int, analysis: D
     return row
 
 
-def get_match_for_program(student_id: int, program_id: int, db: Session) -> Dict[str, Any]:
-    student_profile = db.query(StudentProfile).filter(StudentProfile.id == student_id).first()
+def get_match_for_program(student_id: int, program_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    student_profile = db.query(StudentProfile).filter(StudentProfile.id == student_id, StudentProfile.user_id == user_id).first()
     if not student_profile:
         raise ValueError("Student profile not found")
+    user_id = int(student_profile.user_id)
 
     program_row = db.query(Program, University).join(University, University.id == Program.university_id).filter(Program.id == program_id).first()
     if not program_row:
@@ -597,12 +599,12 @@ def get_match_for_program(student_id: int, program_id: int, db: Session) -> Dict
     program, university = program_row
 
     vector_similarity = _student_similarity_score(student_profile, program, university)
-    cached = _find_cached_match(db, student_id, program_id)
+    cached = _find_cached_match(db, user_id, student_id, program_id)
     if cached:
         return _serialize_match_row(cached, student_profile, program, university, vector_similarity=vector_similarity, cached=True)
 
     analysis = calculate_match_score(student_profile, program, university, vector_similarity=vector_similarity)
-    row = _upsert_match_row(db, student_id, program_id, analysis)
+    row = _upsert_match_row(db, user_id, student_id, program_id, analysis)
     return _serialize_match_row(row, student_profile, program, university, vector_similarity=vector_similarity, cached=False)
 
 
@@ -617,10 +619,10 @@ def refresh_match_cache(db: Session, *, profile_limit: Optional[int] = None, pro
     refreshed_matches = 0
     for profile in profiles:
         refreshed_profiles += 1
-        candidates = retrieve_similar_programs(profile.id, limit=program_limit, db=db)
+        candidates = retrieve_similar_programs(profile.id, profile.user_id, limit=program_limit, db=db)
         for candidate in candidates:
             try:
-                get_match_for_program(profile.id, int(candidate["program_id"]), db)
+                get_match_for_program(profile.id, int(candidate["program_id"]), profile.user_id, db)
                 refreshed_matches += 1
             except Exception:
                 continue

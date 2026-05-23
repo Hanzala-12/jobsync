@@ -1,153 +1,206 @@
-﻿import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import {
+  Briefcase, LayoutDashboard, User, FileText, CheckSquare, 
+  MessageSquare, Video, Target, TrendingUp, LogOut,
+  GraduationCap, Search, Heart, Award
+} from 'lucide-react'
 import './Layout.css'
 
-const jobNavGroups = [
-  {
-    label: 'MAIN',
-    items: [
-      { path: '/', label: 'Dashboard' },
-      { path: '/profile', label: 'Profile' },
-    ],
-  },
-  {
-    label: 'JOBS',
-    items: [
-      { path: '/jobs', label: 'Jobs' },
-      { path: '/daily-scout', label: 'Daily Scout' },
-    ],
-  },
-  {
-    label: 'TRACK',
-    items: [
-      { path: '/applications', label: 'Applications' },
-      { path: '/kanban', label: 'Kanban Board' },
-    ],
-  },
-  {
-    label: 'TOOLS',
-    items: [
-      { path: '/resume', label: 'Resume' },
-      { path: '/cover-letter', label: 'Cover Letter' },
-      { path: '/interview', label: 'Interview Prep' },
-      { path: '/mock-interview', label: 'Mock Interview' },
-      { path: '/skill-gap', label: 'Skill Gap' },
-    ],
-  },
+const careerLinks = [
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/profile', label: 'Profile', icon: User },
+  { path: '/jobs', label: 'Jobs', icon: Briefcase },
+  { path: '/applications', label: 'Applications', icon: CheckSquare },
+  { path: '/kanban', label: 'Kanban Board', icon: LayoutDashboard },
+  { path: '/resume', label: 'Resume', icon: FileText },
+  { path: '/cover-letter', label: 'Cover Letter', icon: FileText },
+  { path: '/interview', label: 'Interview Prep', icon: MessageSquare },
+  { path: '/mock-interview', label: 'Mock Interview', icon: Video },
+  { path: '/skill-gap', label: 'Skill Gap', icon: Target },
+  { path: '/daily-scout', label: 'Daily Scout', icon: TrendingUp },
 ]
 
-const studyNavGroups = [
-  {
-    label: 'STUDY WORKSPACE',
-    items: [
-      { path: '/student/dashboard', label: 'Dashboard' },
-      { path: '/student/profile', label: 'Student Profile' },
-    ],
-  },
-  {
-    label: 'DISCOVER',
-    items: [
-      { path: '/student/search', label: 'University Search' },
-      { path: '/student/matches', label: 'Match Recommendations' },
-      { path: '/student/scholarships', label: 'Scholarships' },
-    ],
-  },
-  {
-    label: 'TRACK',
-    items: [
-      { path: '/student/saved', label: 'Saved Universities' },
-      { path: '/student/applications', label: 'Study Applications' },
-    ],
-  },
+const universityLinks = [
+  { path: '/student/profile', label: 'Student Profile', icon: User },
+  { path: '/student/dashboard', label: 'University Portal', icon: GraduationCap },
+  { path: '/student/search', label: 'University Search', icon: Search },
+  { path: '/student/matches', label: 'Match Recommendations', icon: Target },
+  { path: '/student/saved', label: 'Saved Universities', icon: Heart },
+  { path: '/student/applications', label: 'Study Applications', icon: CheckSquare },
+  { path: '/student/scholarships', label: 'Scholarships', icon: Award },
 ]
 
 const Layout = ({ children, studentProfileId = 0, onLogout }) => {
   const location = useLocation()
   const navigate = useNavigate()
-  const mainClass = location.pathname === '/kanban' ? 'app-main app-main-full' : 'app-main'
-  const isStudyRoute = location.pathname.startsWith('/student')
-  const activeMode = isStudyRoute ? 'study' : 'jobs'
+  
+  const [module, setModule] = useState(() => {
+    return location.pathname.startsWith('/student') ? 'university' : 'career'
+  })
 
-  const navGroups = activeMode === 'study' ? studyNavGroups : jobNavGroups
-
-  const goToMode = (mode) => {
-    if (mode === 'jobs') {
-      navigate('/')
-      return
+  useEffect(() => {
+    if (location.pathname.startsWith('/student')) {
+      setModule('university')
+    } else if (location.pathname !== '/login' && location.pathname !== '/signup') {
+      setModule('career')
     }
+  }, [location.pathname])
 
-    navigate(studentProfileId ? '/student/dashboard' : '/student/profile')
+  const handleModuleSwitch = (newModule) => {
+    setModule(newModule)
+    if (newModule === 'career') {
+      navigate('/')
+    } else {
+      navigate('/student')
+    }
   }
 
+  // Decide main class based on path if needed
+  const isKanban = location.pathname === '/kanban'
+  const isStudyRoute = location.pathname.startsWith('/student')
+
   return (
-    <div className="layout-shell">
-      <header className="workspace-header">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <div className={`layout ${isStudyRoute ? 'is-university' : 'is-career'}`}>
+      <style>{`
+        .custom-nav-item {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          padding: 7px 10px 7px 13px;
+          border-radius: 7px;
+          font-size: 13px;
+          font-weight: 450;
+          color: #555;
+          text-decoration: none;
+          transition: all 0.12s;
+          border-left: 3px solid transparent;
+          cursor: pointer;
+          margin-bottom: 1px;
+        }
+        .custom-nav-item.career-link:hover {
+          background: #f5f5f5;
+          color: #111;
+        }
+        .custom-nav-item.career-active {
+          background: #f0f0f0 !important;
+          color: #111 !important;
+          font-weight: 600 !important;
+          border-left: 3px solid #111 !important;
+        }
+        
+        .custom-nav-item.university-link:hover {
+          background: #f5f2ff;
+          color: #7c3aed;
+        }
+        .custom-nav-item.university-active {
+          background: #ede9fe !important;
+          color: #7c3aed !important;
+          font-weight: 600 !important;
+          border-left: 3px solid #7c3aed !important;
+        }
+      `}</style>
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="logo-square">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </div>
-          <div>
-            <span className="workspace-brand">JobSync</span>
-            <p className="workspace-subtitle">Switch between job hunting and study abroad workspaces</p>
-          </div>
+          <span className="logo-text">JobSync</span>
         </div>
 
-        <div className="workspace-tabs" role="tablist" aria-label="Workspace mode">
+        <div style={{
+          display: 'flex',
+          margin: '12px 10px',
+          background: '#f0f0f0',
+          borderRadius: '8px',
+          padding: '3px',
+          gap: '2px',
+        }}>
           <button
-            type="button"
-            className={`workspace-tab ${activeMode === 'jobs' ? 'active' : ''}`}
-            aria-selected={activeMode === 'jobs'}
-            onClick={() => goToMode('jobs')}
+            onClick={() => handleModuleSwitch('career')}
+            style={{
+              flex: 1,
+              padding: '6px 0',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              background: module === 'career' ? '#ffffff' : 'transparent',
+              color: module === 'career' ? '#111111' : '#888888',
+              boxShadow: module === 'career' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+              transition: 'all 0.15s',
+            }}
           >
-            <span>Jobs</span>
-            <strong>Job search</strong>
+            💼 Career
           </button>
           <button
-            type="button"
-            className={`workspace-tab ${activeMode === 'study' ? 'active' : ''}`}
-            aria-selected={activeMode === 'study'}
-            onClick={() => goToMode('study')}
+            onClick={() => handleModuleSwitch('university')}
+            style={{
+              flex: 1,
+              padding: '6px 0',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              background: module === 'university' ? '#7c3aed' : 'transparent',
+              color: module === 'university' ? '#ffffff' : '#888888',
+              boxShadow: module === 'university' ? '0 1px 3px rgba(124,58,237,0.3)' : 'none',
+              transition: 'all 0.15s',
+            }}
           >
-            <span>Study</span>
-            <strong>University planning</strong>
+            🎓 University
           </button>
         </div>
 
-        <button className="logout-btn header-logout" onClick={() => onLogout?.()}>
-          <span aria-hidden="true">→</span>
-          Log out
-        </button>
-      </header>
-
-      <aside className="sidebar">
-        <nav>
-          {navGroups.map((group) => (
-            <div key={group.label} className="nav-group">
-              <p className="nav-group-label">{group.label}</p>
-              {group.items.map((item) => {
+        <div className="sidebar-scroll" style={{ padding: '0 10px' }}>
+          {module === 'career' && (
+            <div className="nav-section">
+              {careerLinks.map((item) => {
                 const active = location.pathname === item.path
+                const Icon = item.icon
                 return (
-                  <div key={item.path} className={`nav-link-wrap ${active ? 'active' : ''}`}>
-                    {active && <span className="nav-active-bar" aria-hidden="true" />}
-                    <Link to={item.path} className={`nav-link ${active ? 'active' : ''}`}>
-                      {item.label}
-                    </Link>
-                  </div>
+                  <Link key={item.path} to={item.path} onClick={() => setModule('career')} className={`custom-nav-item career-link ${active ? 'career-active' : ''}`}>
+                    <Icon size={16} strokeWidth={active ? 2.5 : 2} style={{ opacity: active ? 1 : 0.75 }} />
+                    <span>{item.label}</span>
+                  </Link>
                 )
               })}
             </div>
-          ))}
+          )}
 
-          <div className="sidebar-footer">
-            <button className="logout-btn" onClick={() => onLogout?.()}>
-              <span aria-hidden="true">→</span>
-              Log out
-            </button>
-          </div>
-        </nav>
+          {module === 'university' && (
+            <div className="nav-section university-section">
+              {universityLinks.map((item) => {
+                const active = location.pathname === item.path
+                const Icon = item.icon
+                return (
+                  <Link key={item.path} to={item.path} onClick={() => setModule('university')} className={`custom-nav-item university-link ${active ? 'university-active' : ''}`}>
+                    <Icon size={16} strokeWidth={active ? 2.5 : 2} style={{ opacity: active ? 1 : 0.75 }} />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="sidebar-footer">
+          <button className="logout-button" onClick={() => onLogout?.()}>
+            <LogOut size={15} />
+            <span>Log out</span>
+          </button>
+        </div>
       </aside>
-      <main className={`${mainClass} page-enter`}>{children}</main>
+
+      <main className={`main-content ${isKanban ? 'main-full' : ''}`}>
+        {children}
+      </main>
     </div>
   )
 }

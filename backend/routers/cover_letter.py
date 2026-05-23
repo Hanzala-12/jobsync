@@ -2,19 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.schemas import CoverLetterRequest, CoverLetterResponse
-from backend.models import UserProfile
+from backend.models import UserProfile, User
+from backend.security import get_current_user
 
 router = APIRouter(prefix="/cover-letter", tags=["Cover Letter"])
 
 @router.post("/generate", response_model=CoverLetterResponse)
-async def generate_cover_letter(req: CoverLetterRequest, db: Session = Depends(get_db)):
+async def generate_cover_letter(req: CoverLetterRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         from core.rag_service import generate_cover_letter_with_rag_async, save_cover_letter_artifacts
     except Exception as exc:
         # Keep API bootable even when optional RAG dependencies are unavailable.
         raise HTTPException(status_code=503, detail="Cover letter generation dependencies are unavailable") from exc
 
-    profile = db.query(UserProfile).first()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     resume_context = ""
     if profile and profile.resume_text:
         resume_context = profile.resume_text[:1500]

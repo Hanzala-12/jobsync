@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from './Button'
 import { studentAPI } from '../api/client'
+import { Search, MapPin, GraduationCap, DollarSign, Award, Target, Filter, ChevronRight, BookmarkPlus } from 'lucide-react'
 import './UniversityModule.css'
 
 function StudentUniversitySearch({ profileId }) {
@@ -75,114 +76,158 @@ function StudentUniversitySearch({ profileId }) {
   }
 
   return (
-    <div className="study-page">
+    <div className="study-page fade-up">
       <section className="study-hero">
         <div>
-          <p className="section-label">Study Mode</p>
-          <h1>University search and filter</h1>
-          <p className="muted">Browse universities directly, then save the ones that fit your budget and academic profile.</p>
+          <p className="section-label"><Search size={14} /> EXPLORE</p>
+          <h1>University Search</h1>
+          <p className="muted">Browse universities globally, then save the ones that fit your budget and academic profile.</p>
         </div>
         <div className="study-hero-actions">
-          <span className="study-badge">{results.length} universities</span>
-          <span className="study-badge">{resultCount} programs</span>
-          <Button variant="secondary" onClick={() => navigate('/student/matches')}>View Matches</Button>
-        </div>
-      </section>
-
-      <section className="study-panel">
-        <div className="panel-head">
-          <div>
-            <p className="section-label">Filters</p>
-            <h2>Refine your search</h2>
-          </div>
-          <div className="study-badge">{canSave ? 'Saving enabled' : 'Create a profile to save'}</div>
-        </div>
-
-        <div className="search-filters">
-          <label>
-            <span>Country</span>
-            <input value={filters.country} onChange={(event) => setFilters({ ...filters, country: event.target.value })} placeholder="Singapore" />
-          </label>
-          <label>
-            <span>Degree level</span>
-            <input value={filters.degree_level} onChange={(event) => setFilters({ ...filters, degree_level: event.target.value })} placeholder="Masters" />
-          </label>
-          <label>
-            <span>Intake</span>
-            <input value={filters.intake} onChange={(event) => setFilters({ ...filters, intake: event.target.value })} placeholder="Fall" />
-          </label>
-          <label>
-            <span>Min ranking</span>
-            <input type="number" value={filters.min_ranking} onChange={(event) => setFilters({ ...filters, min_ranking: event.target.value })} placeholder="200" />
-          </label>
-          <label>
-            <span>Max tuition</span>
-            <input type="number" value={filters.max_tuition} onChange={(event) => setFilters({ ...filters, max_tuition: event.target.value })} placeholder="25000" />
-          </label>
-          <label className="checkbox-item">
-            <input type="checkbox" checked={filters.scholarship_only} onChange={(event) => setFilters({ ...filters, scholarship_only: event.target.checked })} />
-            <span>Scholarship only</span>
-          </label>
-        </div>
-
-        <div className="modal-actions" style={{ marginTop: 14 }}>
-          <Button onClick={() => loadResults(1, false)}>Search</Button>
-          <Button variant="secondary" onClick={() => {
-            setFilters({ country: '', min_ranking: '', max_tuition: '', degree_level: '', intake: '', scholarship_only: false })
-            loadResults(1, false)
-          }}>
-            Reset
+          <span className="study-badge"><Target size={12} style={{display: 'inline', marginRight: 4}}/> {results.length} universities found</span>
+          <Button variant="secondary" onClick={() => navigate('/student/matches')}>
+            View Auto-Matches <ChevronRight size={14} style={{ display: 'inline', marginLeft: 4 }}/>
           </Button>
         </div>
       </section>
 
-      {error && <p className="muted-small" style={{ color: 'var(--danger)' }}>{error}</p>}
+      <section className="study-panel border-box">
+        <div className="panel-head">
+          <div>
+            <p className="section-label"><Filter size={14} /> FILTERS</p>
+            <h2>Refine your search</h2>
+          </div>
+          {!canSave && (
+            <div className="study-badge">Create a profile to save programs</div>
+          )}
+        </div>
+
+        <div className="form-grid">
+          <label>
+            Country
+            <div style={{ position: 'relative' }}>
+              <input value={filters.country} onChange={(event) => setFilters({ ...filters, country: event.target.value })} placeholder="e.g. Singapore" style={{ paddingLeft: 32 }} />
+              <MapPin size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--j-text-3)' }} />
+            </div>
+          </label>
+          <label>
+            Degree Level
+            <div style={{ position: 'relative' }}>
+              <input value={filters.degree_level} onChange={(event) => setFilters({ ...filters, degree_level: event.target.value })} placeholder="e.g. Masters" style={{ paddingLeft: 32 }} />
+              <GraduationCap size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--j-text-3)' }} />
+            </div>
+          </label>
+          <label>
+            Min Ranking
+            <div style={{ position: 'relative' }}>
+              <input type="number" value={filters.min_ranking} onChange={(event) => setFilters({ ...filters, min_ranking: event.target.value })} placeholder="e.g. 200" style={{ paddingLeft: 32 }} />
+              <Award size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--j-text-3)' }} />
+            </div>
+          </label>
+          <label>
+            Max Tuition
+            <div style={{ position: 'relative' }}>
+              <input type="number" value={filters.max_tuition} onChange={(event) => setFilters({ ...filters, max_tuition: event.target.value })} placeholder="e.g. 25000" style={{ paddingLeft: 32 }} />
+              <DollarSign size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--j-text-3)' }} />
+            </div>
+          </label>
+          <label>
+            Intake
+            <input value={filters.intake} onChange={(event) => setFilters({ ...filters, intake: event.target.value })} placeholder="e.g. Fall" />
+          </label>
+        </div>
+
+        <div className="checkbox-grid" style={{ marginTop: 16 }}>
+          <label className="checkbox-item">
+            <input type="checkbox" checked={filters.scholarship_only} onChange={(event) => setFilters({ ...filters, scholarship_only: event.target.checked })} />
+            Scholarship Available Only
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+          <Button onClick={() => loadResults(1, false)}><Search size={14} style={{display: 'inline', marginRight: 6}}/> Search</Button>
+          <Button variant="secondary" onClick={() => {
+            setFilters({ country: '', min_ranking: '', max_tuition: '', degree_level: '', intake: '', scholarship_only: false })
+            loadResults(1, false)
+          }}>
+            Clear Filters
+          </Button>
+        </div>
+      </section>
+
+      {error && <p className="muted-small" style={{ color: 'var(--j-red)' }}>{error}</p>}
 
       {loading && results.length === 0 ? (
-        <div className="study-panel"><div className="loading-block">Loading universities...</div></div>
+        <div className="study-panel"><div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--j-text-3)' }}>Searching universities...</div></div>
       ) : results.length > 0 ? (
-        <div className="match-grid">
+        <div className="grid-cols-2">
           {results.map((item) => (
-            <article className="match-card" key={item.university.id}>
-              <div className="match-card-top">
+            <article className="uni-card fade-up" key={item.university.id}>
+              <div className="uni-header">
                 <div>
-                  <span className="ranking-pill">{item.university.country || 'Unknown country'}</span>
-                  <h3>{item.university.name}</h3>
-                  <p className="muted-small">{item.university.city || 'City not listed'} · {item.programs?.length || 0} programs</p>
+                  <h3 className="uni-title">{item.university.name}</h3>
+                  <div className="uni-meta">
+                    <MapPin size={12} /> {item.university.city || 'Location not listed'}, {item.university.country || 'Unknown'}
+                  </div>
                 </div>
-                <div className="score-pill warn">{item.university.ranking_global || item.university.ranking || 'N/A'}</div>
+                <div className="match-score score-med">#{item.university.ranking_global || item.university.ranking || 'N/A'}</div>
               </div>
 
-              <div className="detail-list" style={{ marginTop: 12 }}>
+              <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p className="section-label">Top Programs</p>
                 {(item.programs || []).slice(0, 3).map((program) => (
-                  <div key={program.id} className="detail-card">
-                    <strong>{program.name}</strong>
-                    <p className="muted-small">{program.degree_level} · Tuition ${Number(program.estimated_tuition_fees || 0).toLocaleString()}</p>
-                    <p className="muted-small">Scholarship: {program.scholarship_available ? 'Available' : 'Not listed'}</p>
-                    <div className="button-row" style={{ marginTop: 10 }}>
-                      <Button onClick={() => saveProgram(item.university.id, program.id)} loading={savingId === program.id}>Save</Button>
+                  <div key={program.id} style={{ background: 'var(--j-surface-1)', padding: 12, borderRadius: 'var(--radius-sm)', border: '1px solid var(--j-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <strong style={{ fontSize: 13, color: 'var(--j-text-1)', lineHeight: 1.4 }}>{program.name}</strong>
+                      <span className="study-badge" style={{ whiteSpace: 'nowrap', marginLeft: 12 }}>{program.degree_level}</span>
                     </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                      <div>
+                        <span style={{ fontSize: 11, color: 'var(--j-text-3)', display: 'block', textTransform: 'uppercase', marginBottom: 2 }}>Tuition</span>
+                        <span style={{ fontSize: 13, color: 'var(--j-text-2)', fontWeight: 500 }}>${Number(program.estimated_tuition_fees || 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: 'var(--j-text-3)', display: 'block', textTransform: 'uppercase', marginBottom: 2 }}>Scholarship</span>
+                        <span style={{ fontSize: 13, color: program.scholarship_available ? 'var(--j-green)' : 'var(--j-text-2)', fontWeight: 500 }}>
+                          {program.scholarship_available ? 'Available' : 'None listed'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <Button size="small" variant="secondary" onClick={() => saveProgram(item.university.id, program.id)} loading={savingId === program.id} style={{ width: '100%' }}>
+                      <BookmarkPlus size={14} style={{ display: 'inline', marginRight: 6 }}/> Save Program
+                    </Button>
                   </div>
                 ))}
+                
+                {(item.programs?.length || 0) > 3 && (
+                  <div style={{ textAlign: 'center', marginTop: 4 }}>
+                    <span style={{ fontSize: 12, color: 'var(--j-text-3)' }}>+ {(item.programs?.length || 0) - 3} more programs available</span>
+                  </div>
+                )}
               </div>
             </article>
           ))}
         </div>
       ) : (
-        <div className="study-panel">
-          <div className="empty-block">
-            <div>
-              <p className="section-label">No results yet</p>
-              <h2>Try a broader filter</h2>
-              <p>Search results will appear here after you apply a filter set.</p>
-            </div>
-          </div>
+        <div className="empty-state">
+          <Search size={32} color="var(--j-text-3)" opacity={0.5} />
+          <p className="section-label" style={{ marginBottom: 0 }}>NO RESULTS</p>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--j-text-1)' }}>Try a broader filter</h2>
+          <p style={{ color: 'var(--j-text-2)' }}>We couldn't find any universities matching your exact criteria.<br/>Try removing some filters.</p>
+          <Button variant="secondary" onClick={() => {
+            setFilters({ country: '', min_ranking: '', max_tuition: '', degree_level: '', intake: '', scholarship_only: false })
+            loadResults(1, false)
+          }}>
+            Clear Filters
+          </Button>
         </div>
       )}
 
       {results.length > 0 && total > results.length && (
-        <div className="modal-actions">
-          <Button variant="secondary" loading={loading} onClick={() => loadResults(page + 1, true)}>Load More</Button>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+          <Button variant="secondary" loading={loading} onClick={() => loadResults(page + 1, true)}>Load More Universities</Button>
         </div>
       )}
     </div>

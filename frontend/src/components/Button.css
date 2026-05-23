@@ -1,72 +1,79 @@
-﻿.btn {
-  border-radius: 12px;
-  padding: 9px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
-}
-
-.btn:hover:not(:disabled) {
-  transform: translateY(-1px);
+  position: relative;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
+}
+
+.btn-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s ease;
+}
+
+.btn-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: spin 1s linear infinite;
+  color: inherit;
+}
+
+@keyframes spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .btn-primary {
-  background: #111827;
-  color: #ffffff;
-  border-color: #111827;
+  background: var(--j-text-1);
+  color: #fff;
+}
+.layout.is-university .btn-primary {
+  background: var(--u-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #1f2937;
-  border-color: #1f2937;
+  opacity: 0.85;
 }
 
-.btn-secondary,
-.btn-outline {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: var(--border);
-  color: var(--text-primary);
+.btn-secondary {
+  background: var(--j-surface);
+  border-color: var(--j-border);
+  color: var(--j-text-1);
+}
+.layout.is-university .btn-secondary {
+  background: var(--u-surface);
+  border-color: var(--u-border);
+  color: var(--u-text-1);
 }
 
-.btn-secondary:hover:not(:disabled),
-.btn-outline:hover:not(:disabled) {
-  background: #ffffff;
-  border-color: #d4d4d8;
+.btn-secondary:hover:not(:disabled) {
+  background: var(--j-surface-2);
+}
+.layout.is-university .btn-secondary:hover:not(:disabled) {
+  background: var(--u-subtle-hover, var(--u-surface-2));
 }
 
-.btn-accent {
-  background: #2563eb;
-  color: #ffffff;
-  border-color: #2563eb;
+.btn-danger {
+  background: var(--j-red);
+  color: #fff;
 }
-
-.btn-accent:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-}
-
-.btn-small {
-  padding: 7px 11px;
-  font-size: 12px;
-}
-
-.btn-medium {
-  padding: 9px 16px;
-}
-
-.btn-large {
-  padding: 11px 18px;
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c; /* harder red */
 }

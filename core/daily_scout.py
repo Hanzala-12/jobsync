@@ -70,14 +70,9 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
     db = next(get_db())
 
     try:
-        _set_state(running=True, progress=5, message="Loading resume", error=None, results=[])
+        _set_state(running=True, progress=5, message="Preparing scout", error=None, results=[])
 
-        profile = db.query(UserProfile).first()
-        if not profile or not profile.resume_text:
-            _set_state(running=False, progress=100, message="Resume missing", error="No resume found. Upload resume first.")
-            return {"error": "No resume found. Upload resume first."}
-
-        _set_state(progress=20, message="Resume loaded")
+        resume_text = ""
 
         _set_state(progress=35, message="Searching live jobs")
         search_query = " ".join(part for part in [role, skills] if part and part.strip())
@@ -89,7 +84,7 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
             return {"error": "No jobs found. Try a different query."}
 
         _set_state(progress=55, message="Scoring jobs against resume")
-        matches = _score_jobs_fast(profile.resume_text, jobs, role, skills, min_score)
+    matches = _score_jobs_fast(resume_text, jobs, role, skills, min_score)
 
         saved_ids = []
         duplicate_count = 0
@@ -115,13 +110,13 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
                 duplicate_count += 1
             else:
                 saved_ids.append(saved_job.id)
-                if profile.resume_text and saved_job.id:
+                if resume_text and saved_job.id:
                     try:
                         from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
 
                         draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
                             saved_job.description or job.get("description", ""),
-                            profile.resume_text[:1500],
+                            resume_text[:1500],
                             company_name=saved_job.company or job.get("company", ""),
                             role=saved_job.title or job.get("title", ""),
                             tone="professional",

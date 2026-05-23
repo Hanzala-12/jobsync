@@ -1,9 +1,9 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
-import MatchPanel from '../components/MatchPanel'
-import { applicationsAPI, jobsAPI, profileAPI, apiActions, API_BASE_URL } from '../api/client'
+import { applicationsAPI, jobsAPI, profileAPI, API_BASE_URL, getStoredAuthToken } from '../api/client'
 import searchStream from '../services/searchStream'
+import { Search, MapPin, ExternalLink, Activity, FileText, CheckCircle2 } from 'lucide-react'
 import './Jobs.css'
 
 const LOCATION_OPTIONS = ['Pakistan', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'UAE', 'UK', 'Remote']
@@ -25,9 +25,7 @@ const resolveExternalJobUrl = (job) => {
   const raw = String(job?.url || job?.apply_url || job?.external_id || '').trim()
   if (!raw) return ''
   if (/^https?:\/\//i.test(raw)) return raw
-  // Accept protocol-relative URLs
   if (/^\/\//.test(raw)) return `${window.location.protocol}${raw}`
-  // If value looks like a domain/path without scheme, prepend https
   if (raw.includes('.') && !raw.includes(':')) return `https://${raw}`
   return ''
 }
@@ -52,16 +50,16 @@ function Jobs() {
   const [error, setError] = useState('')
   const [streamingCount, setStreamingCount] = useState(0)
   const [streamElapsed, setStreamElapsed] = useState(0)
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [panelJob, setPanelJob] = useState(null)
-  const [matchData, setMatchData] = useState(null)
+  
   const [matchModalOpen, setMatchModalOpen] = useState(false)
   const [matchModalLoading, setMatchModalLoading] = useState(false)
   const [matchModalResult, setMatchModalResult] = useState(null)
+  
   const [toast, setToast] = useState('')
   const [profileExists, setProfileExists] = useState(false)
   const [salaryCard, setSalaryCard] = useState(null)
   const [salaryData, setSalaryData] = useState(null)
+  
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
 
@@ -102,12 +100,13 @@ function Jobs() {
     setStreamingCount(0)
     setStreamElapsed(0)
     const selectedRemote = remoteOnly || location === 'Remote'
-    const API_BASE = API_BASE_URL
+    const isLocalBackend = API_BASE_URL === 'http://localhost:8000' || API_BASE_URL === 'http://127.0.0.1:8000'
+    const API_BASE = import.meta.env.DEV && isLocalBackend ? '/api' : (API_BASE_URL || '/api').replace(/\/$/, '')
     const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
-    const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}`
+    const token = getStoredAuthToken()
+    const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}${token ? `&token=${encodeURIComponent(token)}` : ''}`
 
     try {
-      // Start or reuse shared background stream so it continues across navigation
       searchStream.start(url)
       setLoading(true)
     } catch (e) {
@@ -118,7 +117,6 @@ function Jobs() {
     }
   }
 
-  // Subscribe to shared search stream updates. Unsubscribe on unmount but keep stream running.
   useEffect(() => {
     const unsub = searchStream.subscribe((s) => {
       setJobs(s.jobs || [])
@@ -157,12 +155,10 @@ function Jobs() {
     setMatchModalResult(null)
     try {
       let jobId = job.id
-      // If the job isn't stored locally yet, upsert it first so we have an id to match against
       if (!jobId) {
         try {
           const up = await jobsAPI.upsert(job)
           jobId = up.data?.id || up.data?.job_id || null
-          // update local job object so buttons/UX reflect stored state
           if (jobId) job.id = jobId
         } catch (upErr) {
           console.error('Upsert failed', upErr)
@@ -170,7 +166,6 @@ function Jobs() {
       }
 
       if (!jobId) {
-        // couldn't create job on server
         setMatchModalResult({ match_percentage: null, explanation: 'Failed to create job record on server', missing_skills: null, error: true })
         return
       }
@@ -178,19 +173,10 @@ function Jobs() {
       const res = await jobsAPI.match(jobId)
       setMatchModalResult(res.data)
     } catch (e) {
-      // Mark as an error result so the UI can show a proper message
       setMatchModalResult({ match_percentage: null, explanation: 'Failed to fetch match', missing_skills: null, error: true })
     } finally {
       setMatchModalLoading(false)
     }
-  }
-
-  const handleBuildResume = (job) => {
-    navigate('/resume', { state: { tab: 'rewrite', jobDescription: job.description } })
-  }
-
-  const handleCoverLetter = (job) => {
-    navigate('/cover-letter', { state: { job } })
   }
 
   const openSalary = async (job, index) => {
@@ -234,7 +220,6 @@ function Jobs() {
     ;(async () => {
       try {
         const res = await profileAPI.list(1, 10)
-        // API returns { exists, profiles, selected_profile_id, ... }
         if (mounted) setProfileExists(Boolean(res.data?.exists || (res.data?.selected_profile_id !== null)))
       } catch (e) {
         if (mounted) setProfileExists(false)
@@ -250,225 +235,185 @@ function Jobs() {
         <p className="subtitle">Search and save jobs with location-first filters.</p>
       </div>
 
-      <div className="search-card panel-flat job-search-panel">
-        <div className="search-row job-search-row">
-          <div className="job-query-field" style={{ position: 'relative', flex: 1 }}>
-            <input
-              value={query}
-              onChange={(event) => handleQueryChange(event.target.value)}
-              onFocus={() => query.length > 0 && setShowSuggestions(true)}
-              placeholder="Search software engineer, data analyst, frontend..."
-            />
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="autocomplete-dropdown">
-                {suggestions.map((suggestion, index) => (
-                  <div
-                    key={index}
-                    className="autocomplete-item"
-                    onClick={() => selectSuggestion(suggestion)}
-                  >
-                    {suggestion}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+      <div className="search-box">
+        <div className="search-bar">
+          <Search className="search-icon" size={18} />
+          <input
+            value={query}
+            onChange={(event) => handleQueryChange(event.target.value)}
+            onFocus={() => query.length > 0 && setShowSuggestions(true)}
+            placeholder="Search software engineer, data analyst, frontend..."
+          />
           <Button onClick={search} loading={loading}>Search</Button>
+          
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {suggestions.map((suggestion, index) => (
+                <div key={index} className="autocomplete-item" onClick={() => selectSuggestion(suggestion)}>
+                  {suggestion}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="location-row-wrap">
-          <p className="section-label">Location</p>
-          <div className="locations">
+        <div className="filters-row">
+          <div className="location-pills">
             {LOCATION_OPTIONS.map((option) => (
               <button
                 key={option}
                 type="button"
-                className={location === option ? 'loc-btn active' : 'loc-btn'}
+                className={`location-pill ${location === option ? 'active' : ''}`}
                 onClick={() => setLocation(option)}
               >
                 {option}
               </button>
             ))}
           </div>
-          <div className="toggle-group">
-            <label className="remote-toggle">
-              <input
-                type="checkbox"
-                checked={pakistanOnly}
-                onChange={(event) => {
-                  const next = event.target.checked
-                  setPakistanOnly(next)
-                  if (next) setRemoteOnly(false)
-                }}
-              />
+          <div className="checkbox-filters">
+            <label>
+              <input type="checkbox" checked={pakistanOnly} onChange={(e) => { setPakistanOnly(e.target.checked); if (e.target.checked) setRemoteOnly(false); }} />
               Pakistan only
             </label>
-            <label className="remote-toggle">
-              <input
-                type="checkbox"
-                checked={remoteOnly}
-                onChange={(event) => {
-                  const next = event.target.checked
-                  setRemoteOnly(next)
-                  if (next) setPakistanOnly(false)
-                }}
-              />
+            <label>
+              <input type="checkbox" checked={remoteOnly} onChange={(e) => { setRemoteOnly(e.target.checked); if (e.target.checked) setPakistanOnly(false); }} />
               Remote only
             </label>
           </div>
         </div>
       </div>
 
-      {error && <p className="error-text">{error}</p>}
-      {!profileExists && (
-        <p className="warning-text">⚠️ Please complete your profile first — Match, Build Resume and Cover Letter are disabled.</p>
-      )}
-      {toast && <p className="toast-text">{toast}</p>}
-      <p className="muted-text">{resultText}</p>
+      {error && <p className="status-message error">{error}</p>}
+      {!profileExists && <p className="status-message warning">⚠️ Please complete your profile first — Match Me and Resume will prompt you to finish it.</p>}
+      {toast && <p className="status-message success">{toast}</p>}
+      
+      {!loading && jobs.length > 0 && <p className="results-count">{resultText}</p>}
+      
       {loading && (
-        <div>
-          <p className="muted-text">
-            <span className="spinner" aria-hidden="true" />
-            {' '}
-            Streaming results: {streamingCount} so far · {streamElapsed}s elapsed
-          </p>
-          <div className="progress-wrap" aria-hidden>
-            {/* If we have a combined_count we show a heuristic determinate width, otherwise indeterminate */}
-            {streamingCount > 0 ? (
-              <div className="progress-bar" style={{ width: Math.min(100, streamingCount * 6) + '%' }} />
-            ) : (
-              <div className="progress-bar progress-indeterminate" style={{ width: '40%' }} />
-            )}
+        <div className="search-loader">
+          <div className="loader-text">Streaming results: {streamingCount} so far · {streamElapsed}s elapsed</div>
+          <div className="loader-bar-wrap">
+            <div className="loader-bar" style={{ width: streamingCount > 0 ? Math.min(100, streamingCount * 6) + '%' : '30%' }} />
           </div>
         </div>
       )}
 
-      {remoteCount > 0 && !remoteOnly && location !== 'Remote' && (
-        <p className="notice-text">Showing {localCount} local jobs and {remoteCount} remote jobs for {location}</p>
-      )}
-
-      {isCitySearch && localCount < 5 && remoteCount > 0 && !pakistanOnly && (
-        <p className="limited-text">Limited local jobs found for {location}. Showing remote jobs that accept Pakistan candidates.</p>
+      {!loading && jobs.length === 0 && (
+        <div className="empty-state">
+          <Search size={32} color="var(--j-text-3)" opacity={0.5} />
+          <p className="section-label" style={{ marginBottom: 0 }}>NO JOBS FOUND</p>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--j-text-1)' }}>Try a broader search</h2>
+          <p style={{ color: 'var(--j-text-2)' }}>We couldn’t find any jobs for this query yet.<br />Try a broader role title or switch to a different location.</p>
+        </div>
       )}
 
       <div className="jobs-grid">
         {jobs.map((job, index) => (
-          <article key={`${job.id || index}-${job.title}`} className="job-card">
-            <div className="card-top-meta">
-              <span className="company-meta">{job.company}</span>
-              <span className="source-pill">{sourceBadge(job.source)}</span>
+          <article key={`${job.id || index}-${job.title}`} className="job-card fade-up">
+            <div className="card-top">
+              <span className="card-company">{job.company}</span>
+              <span className="card-source">{sourceBadge(job.source)}</span>
             </div>
-            <h3>{job.title}</h3>
-            <p className="job-location">{job.location || 'Remote'}</p>
-            <p className="job-description">{job.description || 'No description available.'}</p>
-            <div className="divider" />
-            <div className="job-actions">
+            
+            <h3 className="card-title">{job.title}</h3>
+            <div className="card-location"><MapPin size={12} /> {job.location || 'Remote'}</div>
+            
+            <div className="card-desc-wrap">
+              <p className="card-desc">{job.description || 'No description available.'}</p>
+            </div>
+            
+            <div className="card-actions">
               {resolveExternalJobUrl(job) ? (
-                <a href={resolveExternalJobUrl(job)} target="_blank" rel="noreferrer">View Job {'->'}</a>
+                <a href={resolveExternalJobUrl(job)} target="_blank" rel="noreferrer" className="action-view">View <ExternalLink size={12} /></a>
               ) : (
-                <button type="button" disabled title="No external job link provided">View Job {'->'}</button>
+                <span className="action-view disabled">View <ExternalLink size={12} /></span>
               )}
+              
               <button
                 type="button"
-                onClick={() => openMatch(job)}
-                disabled={!profileExists}
-                title={!profileExists ? 'Complete your profile' : ''}
+                onClick={() => {
+                  if (!profileExists) {
+                    alert('Please complete your profile first')
+                    return
+                  }
+                  openMatch(job)
+                }}
+                className="action-btn"
+                title={profileExists ? 'Match your profile to this job' : 'Complete your profile to use Match Me'}
               >
                 Match Me
               </button>
-              <button type="button" onClick={() => handleBuildResume(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Build Resume</button>
-              <button type="button" onClick={() => handleCoverLetter(job)} disabled={!profileExists} title={!profileExists ? 'Complete your profile' : ''}>Cover Letter</button>
-              <button type="button" className="salary-link" onClick={() => openSalary(job, index)}>Est. Salary</button>
-              <Button size="small" variant="secondary" onClick={() => saveToTracker(job)}>Save</Button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!profileExists) {
+                    alert('Please complete your profile first')
+                    return
+                  }
+                  navigate('/resume', { state: { tab: 'rewrite', jobDescription: job.description } })
+                }}
+                className="action-btn"
+                title={profileExists ? 'Rewrite your resume for this job' : 'Complete your profile to use Resume'}
+              >
+                Resume
+              </button>
+              <button type="button" onClick={() => openSalary(job, index)} className="action-btn">$ Est.</button>
+              <button type="button" onClick={() => saveToTracker(job)} className="action-save">Save</button>
             </div>
 
             {salaryCard === index && salaryData && (
-              <div className="salary-popover">
-                <p>PKR {salaryData.local_min}-{salaryData.local_max}/month · ${salaryData.remote_min}-{salaryData.remote_max} remote</p>
-                <p>Demand: <strong className="demand-badge">{salaryData.market_demand}</strong></p>
-                <p>{salaryData.negotiation_tip}</p>
-                <small>AI estimate</small>
+              <div className="salary-popover fade-up">
+                <p className="sal-amount">PKR {salaryData.local_min}-{salaryData.local_max}/mo · ${salaryData.remote_min}-{salaryData.remote_max} remote</p>
+                <p className="sal-demand">Demand: <span className="sal-badge">{salaryData.market_demand}</span></p>
+                <p className="sal-tip">{salaryData.negotiation_tip}</p>
               </div>
             )}
           </article>
         ))}
       </div>
 
-      <div className="pagination">{jobs.length > 0 ? `${jobs.length} live results` : 'Run a search to stream live results'}</div>
-      <MatchPanel
-        open={panelOpen}
-        job={panelJob}
-        matchData={matchData}
-        onClose={() => setPanelOpen(false)}
-        onRewrite={(jobDescription) => {
-          setPanelOpen(false)
-          navigate('/resume', { state: { tab: 'rewrite', jobDescription } })
-        }}
-      />
-
       {matchModalOpen && (
-        <div className="match-modal-overlay" onClick={() => setMatchModalOpen(false)}>
-          <div className="match-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <div className="match-overlay" onClick={() => setMatchModalOpen(false)}>
+          <div className="match-modal fade-up" onClick={(e) => e.stopPropagation()}>
             {matchModalLoading ? (
-              <div className="match-loading-container">
-                <div className="spinner" style={{ width: 40, height: 40, borderWidth: 4 }} />
-                <p>Analyzing job fit with AI...</p>
+              <div className="match-loading">
+                <div className="spinner" />
+                <p>Analyzing job fit...</p>
               </div>
             ) : (
-              <div className="match-modal-body">
-                <h3>Match Score: {matchModalResult && matchModalResult.match_percentage !== null ? Math.round(matchModalResult.match_percentage) + '%' : 'N/A'}</h3>
-                <div className="match-progress">
-                  <div
-                    className="match-progress-bar"
-                    style={{ width: `${matchModalResult && matchModalResult.match_percentage !== null ? Math.min(100, matchModalResult.match_percentage) : 0}%` }}
-                  />
+              <div className="match-content">
+                <div className="match-score-wrap">
+                  <span className="match-score-value">{matchModalResult?.match_percentage ? Math.round(matchModalResult.match_percentage) : 0}%</span>
+                  <span className="match-score-label">Match Score</span>
+                </div>
+                
+                <div className="match-bar-wrap">
+                  <div className="match-bar" style={{ width: `${matchModalResult?.match_percentage || 0}%` }} />
                 </div>
 
-                {matchModalResult && matchModalResult.error ? (
-                  <div className="match-error">
-                    <p><strong>Analysis unavailable:</strong> {matchModalResult.explanation}</p>
-                    <p>Please try again later.</p>
-                  </div>
+                {matchModalResult?.error ? (
+                  <p className="match-error">{matchModalResult.explanation}</p>
                 ) : (
-                  <>
-                    <h4>Detected Skills</h4>
-                    <div className="missing-skills-container">
-                      {normalizeSkillList(matchModalResult?.matched_skills).length > 0 ? (
-                        normalizeSkillList(matchModalResult.matched_skills).map((skill, i) => (
-                          <span key={i} className="missing-skill-chip" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#dbeafe' }}>{skill}</span>
-                        ))
-                      ) : (
-                        <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No explicit skills detected</span>
-                      )}
-                    </div>
-
-                    <h4>Missing Skills</h4>
-                    <div className="missing-skills-container">
-                      {normalizeSkillList(matchModalResult?.missing_skills).length > 0 ? (
-                        normalizeSkillList(matchModalResult.missing_skills).map((s, i) => (
-                          <span key={i} className="missing-skill-chip">{s}</span>
-                        ))
-                      ) : (
-                        // Only show "Perfect Match" when the score is effectively 100%
-                        (matchModalResult.match_percentage !== null && matchModalResult.match_percentage >= 99) ? (
-                          <span className="missing-skill-chip" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#dcfce7' }}>None (Perfect Match!)</span>
+                  <div className="match-details">
+                    <div className="match-section">
+                      <h4>Missing Skills</h4>
+                      <div className="match-pills">
+                        {normalizeSkillList(matchModalResult?.missing_skills).length > 0 ? (
+                          normalizeSkillList(matchModalResult.missing_skills).map((s, i) => <span key={i} className="skill-pill-missing">{s}</span>)
                         ) : (
-                          // For empty arrays that are not true perfect matches, show a clearer message
-                          <span className="missing-skill-chip" style={{ background: '#fff7ed', color: '#92400e', borderColor: '#ffedd5' }}>No detailed analysis available</span>
-                        )
-                      )}
+                          <span className="skill-pill-ok"><CheckCircle2 size={12}/> Perfect Match</span>
+                        )}
+                      </div>
                     </div>
-
-                    <h4>Analysis Explanation</h4>
-                    <p className="match-explanation">
-                      {matchModalResult && matchModalResult.explanation ? matchModalResult.explanation : 'No explanation available.'}
-                    </p>
-                  </>
+                    
+                    <div className="match-section">
+                      <h4>Explanation</h4>
+                      <p className="match-exp">{matchModalResult?.explanation || 'No explanation available.'}</p>
+                    </div>
+                  </div>
                 )}
-
-                <div className="match-modal-actions">
-                  <button className="match-modal-close-btn" onClick={() => setMatchModalOpen(false)}>Close</button>
-                </div>
+                
+                <Button className="w-full" onClick={() => setMatchModalOpen(false)}>Close</Button>
               </div>
             )}
           </div>

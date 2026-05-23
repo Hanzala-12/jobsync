@@ -1,15 +1,24 @@
-import axios from 'axios'
+﻿import axios from 'axios'
 
 const AUTH_TOKEN_KEY = 'jobsync_access_token'
+const REFRESH_TOKEN_KEY = 'jobsync_refresh_token'
 let authToken = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : ''
+let refreshToken = typeof window !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN_KEY) : ''
 
 function resolveApiBaseUrl() {
   const configured = String(import.meta.env.VITE_API_URL || '').trim()
-  if (configured) {
-    return configured.replace(/\/$/, '')
+  if (!configured) {
+    return ''
   }
 
-  return ''
+  if (!import.meta.env.PROD) {
+    const localBackendUrls = ['http://localhost:8000', 'http://127.0.0.1:8000']
+    if (localBackendUrls.includes(configured.replace(/\/$/, ''))) {
+      return ''
+    }
+  }
+
+  return configured.replace(/\/$/, '')
 }
 
 export const API_BASE_URL = resolveApiBaseUrl()
@@ -28,14 +37,31 @@ export function setAuthToken(token) {
   }
 }
 
+export function setRefreshToken(token) {
+  refreshToken = token || ''
+  if (typeof window === 'undefined') return
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+  }
+}
+
 export function getStoredAuthToken() {
   if (authToken) return authToken
   if (typeof window === 'undefined') return ''
   return localStorage.getItem(AUTH_TOKEN_KEY) || ''
 }
 
+export function getStoredRefreshToken() {
+  if (refreshToken) return refreshToken
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem(REFRESH_TOKEN_KEY) || ''
+}
+
 export function clearAuthToken() {
   setAuthToken('')
+  setRefreshToken('')
 }
 
 apiClient.interceptors.request.use((config) => {
@@ -89,7 +115,7 @@ apiClient.interceptors.response.use(
       error.response.data = normalized
     }
 
-    if (status === 401 && getStoredAuthToken()) {
+    if (status === 401 && (getStoredAuthToken() || getStoredRefreshToken())) {
       clearAuthToken()
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('jobsync-auth-invalidated'))
@@ -172,21 +198,24 @@ export const applicationsAPI = {
 }
 
 export const studentAPI = {
-  createProfile: (data) => apiClient.post('/student/profile', data),
+  createProfile: (data) => apiClient.post('/api/student/profile', data),
   getCurrentProfile: () => apiClient.get('/api/student/profile'),
-  getProfile: (id) => apiClient.get(`/student/profile/${id}`),
-  updateProfile: (id, data) => apiClient.patch(`/student/profile/${id}`, data),
+  listProfiles: () => apiClient.get('/api/student/profiles'),
+  selectProfile: (profileId) => apiClient.post(`/api/student/profile/select/${profileId}`),
+  getProfile: (id) => apiClient.get(`/api/student/profile/${id}`),
+  updateProfile: (id, data) => apiClient.patch(`/api/student/profile/${id}`, data),
+  deleteProfile: (id) => apiClient.delete(`/api/student/profile/${id}`),
   getRecommendations: (profileId, limit = 20, filters = {}) =>
-    apiClient.post('/student/match/recommend', { student_profile_id: profileId, limit, ...filters }),
+    apiClient.post('/api/student/match/recommend', { student_profile_id: profileId, limit, ...filters }),
   getProgramMatch: (profileId, programId) =>
-    apiClient.get(`/student/match/program/${programId}`, { params: { student_profile_id: profileId } }),
-  getUniversitiesFilter: (params) => apiClient.get('/student/universities/filter', { params }),
-  getUniversityDetail: (universityId) => apiClient.get(`/student/university/${universityId}/detail`),
-  saveUniversity: (studentId, programId) => apiClient.post('/student/save', { student_id: studentId, program_id: programId }),
-  getSavedUniversities: (studentId) => apiClient.get(`/student/saved/${studentId}`),
-  applyProgram: (studentId, programId, notes = '') => apiClient.post('/student/apply', { student_id: studentId, program_id: programId, notes }),
-  updateApplication: (applicationId, payload) => apiClient.put(`/student/applications/${applicationId}`, payload),
-  getApplications: (studentId) => apiClient.get(`/student/applications/${studentId}`),
+    apiClient.get(`/api/student/match/program/${programId}`, { params: { student_profile_id: profileId } }),
+  getUniversitiesFilter: (params) => apiClient.get('/api/student/universities/filter', { params }),
+  getUniversityDetail: (universityId) => apiClient.get(`/api/student/university/${universityId}/detail`),
+  saveUniversity: (studentId, programId) => apiClient.post('/api/student/save', { student_id: studentId, program_id: programId }),
+  getSavedUniversities: (studentId) => apiClient.get(`/api/student/saved/${studentId}`),
+  applyProgram: (studentId, programId, notes = '') => apiClient.post('/api/student/apply', { student_id: studentId, program_id: programId, notes }),
+  updateApplication: (applicationId, payload) => apiClient.put(`/api/student/applications/${applicationId}`, payload),
+  getApplications: (studentId) => apiClient.get(`/api/student/applications/${studentId}`),
 }
 
 export const dailyScoutAPI = {

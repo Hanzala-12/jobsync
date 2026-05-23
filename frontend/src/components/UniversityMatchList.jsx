@@ -43,12 +43,14 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
         sort_by: filters.sort_by,
       })
       const incoming = response.data?.results || []
-      const minRanking = rankingRange.min === '' ? null : Number(rankingRange.min)
-      const maxRanking = rankingRange.max === '' ? null : Number(rankingRange.max)
+      const rawMinRanking = rankingRange.min === '' ? null : Number(rankingRange.min)
+      const rawMaxRanking = rankingRange.max === '' ? null : Number(rankingRange.max)
+      const minRanking = rawMinRanking !== null && rawMaxRanking !== null ? Math.min(rawMinRanking, rawMaxRanking) : rawMinRanking
+      const maxRanking = rawMinRanking !== null && rawMaxRanking !== null ? Math.max(rawMinRanking, rawMaxRanking) : rawMaxRanking
       const filtered = incoming.filter((item) => {
         const ranking = Number(item.university?.ranking_global || item.program?.ranking_global || 0)
-        if (minRanking !== null && ranking && ranking > minRanking) return false
-        if (maxRanking !== null && ranking && ranking < maxRanking) return false
+        if (minRanking !== null && ranking && ranking < minRanking) return false
+        if (maxRanking !== null && ranking && ranking > maxRanking) return false
         return true
       })
       setResults((prev) => {
@@ -140,11 +142,11 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
               </label>
               <label>
                 <span>Ranking min</span>
-                <input type="number" value={rankingRange.min} onChange={(e) => setRankingRange({ ...rankingRange, min: e.target.value })} placeholder="Top 200" />
+                <input type="number" value={rankingRange.min} onChange={(e) => setRankingRange({ ...rankingRange, min: e.target.value })} placeholder="e.g. 1" />
               </label>
               <label>
                 <span>Ranking max</span>
-                <input type="number" value={rankingRange.max} onChange={(e) => setRankingRange({ ...rankingRange, max: e.target.value })} placeholder="Top 50" />
+                <input type="number" value={rankingRange.max} onChange={(e) => setRankingRange({ ...rankingRange, max: e.target.value })} placeholder="e.g. 500" />
               </label>
               <label>
                 <span>Sort by</span>
@@ -177,12 +179,12 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
               <div className="loading-block">Loading matches...</div>
             ) : visibleResults.length > 0 ? (
               <div className="match-grid">
-                {visibleResults.map((item) => {
+                {visibleResults.map((item, index) => {
                   const ranking = item.university.ranking_global || item.program.ranking_global || item.university.ranking || 'N/A'
                   const score = item.match.match_score || 0
                   const summary = item.match.summary || item.match.recommendations?.[0] || 'A higher score means the program fits your profile, budget, and location preferences more closely.'
                   return (
-                    <article className="match-card" key={item.program.id}>
+                    <article className="match-card" key={`${item.university.id || 'u'}-${item.program.id || 'p'}-${index}`}>
                       <div className="match-card-top">
                         <div>
                           <span className="ranking-pill">Rank {ranking}</span>
@@ -222,8 +224,8 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
             </div>
             {compareItems.length > 0 && (
               <div className="compare-grid" style={{ marginTop: 18 }}>
-                {compareItems.map((item) => (
-                  <article key={item.program.id} className="compare-card">
+                {compareItems.map((item, index) => (
+                  <article key={`${item.university.id || 'u'}-${item.program.id || 'p'}-${index}`} className="compare-card">
                     <p className="section-label">Compare</p>
                     <h3>{item.university.name}</h3>
                     <p className="muted-small">{item.program.name}</p>
@@ -238,8 +240,8 @@ function UniversityMatchList({ profileId, heading = 'University Matches', initia
 
       {!showFilters && (
         <div className="match-grid">
-          {visibleResults.map((item) => (
-            <article className="match-card" key={item.program.id}>
+          {visibleResults.map((item, index) => (
+            <article className="match-card" key={`${item.university.id || 'u'}-${item.program.id || 'p'}-${index}`}>
               <h3>{item.university.name}</h3>
               <p className="muted-small">{item.program.name}</p>
             </article>

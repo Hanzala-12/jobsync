@@ -4,7 +4,8 @@ Kanban Board API - Visual application tracking
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from core.database import get_db
-from backend.models import Application, ApplicationStatus, UserProfile
+from backend.models import Application, ApplicationStatus, UserProfile, User
+from backend.security import get_current_user
 from core.llm_provider import LLMProvider
 from pydantic import BaseModel
 from datetime import datetime
@@ -63,7 +64,7 @@ def _format_date(value):
     return parsed.strftime('%Y-%m-%d')
 
 @router.get("/board")
-def get_board(db: Session = Depends(get_db)):
+def get_board(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get Kanban board with applications grouped by status"""
     columns = {
         ApplicationStatus.SAVED.value: [],
@@ -73,9 +74,9 @@ def get_board(db: Session = Depends(get_db)):
         ApplicationStatus.OFFERED.value: []
     }
     
-    profile = db.query(UserProfile).first()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     latest_ats_score = profile.latest_ats_score if profile else None
-    apps = db.query(Application).all()
+    apps = db.query(Application).filter(Application.user_id == current_user.id).all()
     
     for app in apps:
         status = app.status
@@ -97,9 +98,9 @@ def get_board(db: Session = Depends(get_db)):
     return columns
 
 @router.post("/move")
-def move_application(move: ApplicationMove, db: Session = Depends(get_db)):
+def move_application(move: ApplicationMove, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Move application to different status column"""
-    app = db.query(Application).filter(Application.id == move.id).first()
+    app = db.query(Application).filter(Application.id == move.id, Application.user_id == current_user.id).first()
     
     if not app:
         raise HTTPException(404, "Application not found")
@@ -115,9 +116,9 @@ def move_application(move: ApplicationMove, db: Session = Depends(get_db)):
     return {"success": True, "message": f"Moved to {move.new_status}"}
 
 @router.post("/follow-up-email")
-def generate_follow_up_email(req: FollowUpRequest, db: Session = Depends(get_db)):
+def generate_follow_up_email(req: FollowUpRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Generate a follow-up email draft for an application."""
-    app = db.query(Application).filter(Application.id == req.id).first()
+    app = db.query(Application).filter(Application.id == req.id, Application.user_id == current_user.id).first()
 
     if not app:
         raise HTTPException(404, "Application not found")

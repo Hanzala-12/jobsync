@@ -1,5 +1,7 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import apiClient from '../api/client'
+import { GripVertical, Mail } from 'lucide-react'
+import Button from '../components/Button'
 import './Kanban.css'
 
 const COLUMNS = ['Saved', 'Applied', 'Interviewing', 'Offered', 'Rejected']
@@ -26,34 +28,33 @@ function Kanban() {
   }
 
   const urgencyColor = (item) => {
-    if (item.urgency?.level === 'red') return 'dot-red'
-    if (item.urgency?.level === 'yellow') return 'dot-yellow'
-    return 'dot-green'
+    if (item.urgency?.level === 'red') return 'urgency-red'
+    if (item.urgency?.level === 'yellow') return 'urgency-yellow'
+    return 'urgency-green'
   }
 
   return (
-    <div className="kanban-page">
-      <div className="page-header">
+    <div className="kanban-page fade-up">
+      <div className="page-header kanban-header-box">
         <h1>Kanban Board</h1>
         <p className="subtitle">Track each application by stage.</p>
+        <p className="summary-text">{total} total active applications</p>
       </div>
 
-      <p className="summary">{total} total cards</p>
-
-      <div className="board-grid">
+      <div className="kanban-board">
         {COLUMNS.map((column) => (
           <section
             key={column}
-            className={`board-column ${column.toLowerCase()}`}
+            className={`kanban-column ${column.toLowerCase()}`}
             onDragOver={(event) => event.preventDefault()}
             onDrop={() => dragId && move(dragId, column)}
           >
-            <header>
-              <h3>{column}</h3>
-              <span>{board[column]?.length || 0}</span>
-            </header>
+            <div className="column-header">
+              <h3 className="column-title">{column}</h3>
+              <span className="column-count">{board[column]?.length || 0}</span>
+            </div>
 
-            <div className="cards">
+            <div className="kanban-cards">
               {(board[column] || []).map((item) => (
                 <article
                   key={item.id}
@@ -62,27 +63,36 @@ function Kanban() {
                   onDragStart={() => setDragId(item.id)}
                   onDragEnd={() => setDragId(null)}
                 >
-                  <span className={`urgency ${urgencyColor(item)}`} />
-                  <p className="company">{item.company}</p>
-                  <p className="role">{item.role}</p>
-                  <p className="date">{item.applied_date || '-'}</p>
-                  {item.ats_score !== null && item.ats_score !== undefined && (
-                    <span className="ats-pill">ATS {item.ats_score}</span>
-                  )}
-                  <p className="drag-handle">⠿</p>
+                  <span className={`card-urgency ${urgencyColor(item)}`} />
+                  <div className="card-drag-handle">
+                    <GripVertical size={14} />
+                  </div>
+                  
+                  <div className="card-body">
+                    <p className="card-company">{item.company}</p>
+                    <p className="card-role">{item.role}</p>
+                  </div>
+                  
+                  <div className="card-footer">
+                    <p className="card-date">{item.applied_date ? new Date(item.applied_date).toLocaleDateString() : 'No date'}</p>
+                    {item.ats_score !== null && item.ats_score !== undefined && (
+                      <span className="card-ats">ATS {item.ats_score}</span>
+                    )}
+                  </div>
+                  
                   <button
                     type="button"
-                    className="follow-link"
+                    className="follow-btn"
                     onClick={async () => {
                       const response = await apiClient.post('/kanban/follow-up-email', { id: item.id })
                       setEmailModal({
                         open: true,
                         text: response.data?.draft || '',
-                        title: `${item.role} at ${item.company}`,
+                        title: `Follow-up: ${item.role} at ${item.company}`,
                       })
                     }}
                   >
-                    Generate Follow-up Email
+                    <Mail size={12} /> Email Draft
                   </button>
                 </article>
               ))}
@@ -92,10 +102,11 @@ function Kanban() {
       </div>
 
       {emailModal.open && (
-        <div className="modal" onClick={() => setEmailModal({ open: false, text: '', title: '' })}>
-          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+        <div className="email-modal-overlay" onClick={() => setEmailModal({ open: false, text: '', title: '' })}>
+          <div className="email-modal-content fade-up" onClick={(event) => event.stopPropagation()}>
             <h3>{emailModal.title}</h3>
             <pre>{emailModal.text}</pre>
+            <Button className="w-full" onClick={() => setEmailModal({ open: false, text: '', title: '' })}>Close</Button>
           </div>
         </div>
       )}

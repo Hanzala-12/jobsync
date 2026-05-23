@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Application, ApplicationStatus, ResumeVersion, UserProfile
+from backend.models import Application, ApplicationStatus, ResumeVersion, User, UserProfile
+from backend.security import get_current_user
 from backend.security import require_current_user
 from backend.schemas import (
     ApplicationCreate,
@@ -62,8 +63,9 @@ def _status_message(score: int) -> str:
 
 
 @router.post("/", response_model=ApplicationOut)
-def create_application(app: ApplicationCreate, db: Session = Depends(get_db)):
+def create_application(app: ApplicationCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     new_app = Application(
+        user_id=current_user.id,
         job_id=app.job_id,
         company=app.company,
         role=app.role,
@@ -81,18 +83,18 @@ def create_application(app: ApplicationCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[ApplicationOut])
-def list_applications(status: str = None, db: Session = Depends(get_db)):
-    query = db.query(Application)
+def list_applications(status: str = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    query = db.query(Application).filter(Application.user_id == current_user.id)
     if status:
         query = query.filter(Application.status == status)
     return query.order_by(Application.applied_date.desc()).all()
 
 
 @router.get("/health-score", response_model=HealthScoreResponse)
-def application_health_score(db: Session = Depends(get_db)):
-    applications = db.query(Application).order_by(Application.applied_date.desc()).all()
-    profile = db.query(UserProfile).first()
-    resume_versions = db.query(ResumeVersion).all()
+def application_health_score(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    applications = db.query(Application).filter(Application.user_id == current_user.id).order_by(Application.applied_date.desc()).all()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    resume_versions = db.query(ResumeVersion).filter(ResumeVersion.user_id == current_user.id).all()
 
     now = datetime.utcnow()
     seven_days_ago = now - timedelta(days=7)
@@ -184,16 +186,16 @@ def application_health_score(db: Session = Depends(get_db)):
 
 
 @router.get("/{app_id}", response_model=ApplicationOut)
-def get_application(app_id: int, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
+def get_application(app_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
         raise HTTPException(404, "Application not found")
     return app
 
 
 @router.patch("/{app_id}/status", response_model=ApplicationOut)
-def update_status(app_id: int, status_update: StatusUpdate, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
+def update_status(app_id: int, status_update: StatusUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
         raise HTTPException(404, "Application not found")
     app.status = status_update.status
@@ -203,8 +205,8 @@ def update_status(app_id: int, status_update: StatusUpdate, db: Session = Depend
 
 
 @router.patch("/{app_id}", response_model=ApplicationOut)
-def update_application(app_id: int, update: ApplicationUpdate, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
+def update_application(app_id: int, update: ApplicationUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
         raise HTTPException(404, "Application not found")
 
@@ -217,8 +219,8 @@ def update_application(app_id: int, update: ApplicationUpdate, db: Session = Dep
 
 
 @router.delete("/{app_id}")
-def delete_application(app_id: int, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
+def delete_application(app_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
         raise HTTPException(404, "Application not found")
 

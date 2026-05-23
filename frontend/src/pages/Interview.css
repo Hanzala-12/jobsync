@@ -1,101 +1,151 @@
-﻿.interview-page {
+.interview-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
 }
 
-.predict-inputs {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px;
+.panel-card {
+  background: white;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--j-border);
+  padding: 32px;
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
-.predict-inputs textarea,
-.predict-inputs input,
-.predict-inputs select {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px;
+.field-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--j-text-3);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.text-area {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--j-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--j-text-1);
+  background: white;
+  margin-bottom: 24px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  resize: vertical;
+}
+.text-area:focus {
+  outline: none;
+  border-color: var(--j-accent);
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
 }
 
 .inline-inputs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.inline-inputs input {
+  flex: 1;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--j-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: white;
+  transition: border 0.15s;
+}
+.inline-inputs input:focus {
+  outline: none;
+  border-color: var(--j-accent);
 }
 
 .question-section {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
 }
-
 .question-section h3 {
   font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--j-text-3);
+  border-bottom: 1px solid var(--j-border);
+  padding-bottom: 8px;
   margin-bottom: 8px;
 }
 
 .question-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
+  background: white;
+  border: 1px solid var(--j-border);
+  border-radius: var(--radius-sm);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
 }
+.question-card:hover { border-color: var(--j-border-hover); }
 
-.question-card.gap {
-  border-left: 3px solid var(--danger);
-}
-
-.question-card.curveball {
-  border-left: 3px solid var(--warning);
-}
+.question-card.gap { border-left: 3px solid var(--j-red); }
+.question-card.curveball { border-left: 3px solid var(--j-amber); }
 
 .question-title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--j-text-1);
+  line-height: 1.4;
+  margin-bottom: 8px;
 }
 
-.why {
-  margin-top: 4px;
+.question-why {
   font-size: 13px;
+  color: var(--j-text-2);
+  margin-bottom: 16px;
   font-style: italic;
-  color: var(--text-secondary);
 }
 
-.toggle {
-  margin-top: 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #fff;
-  padding: 4px 8px;
+.toggle-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--j-blue);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  margin-bottom: 16px;
 }
+.toggle-btn:hover { text-decoration: underline; }
 
 .question-card ul {
-  margin-top: 8px;
-  padding-left: 18px;
+  padding-left: 20px;
+  margin-bottom: 24px;
+  font-size: 13px;
+  color: var(--j-text-2);
+  line-height: 1.6;
 }
+.question-card ul li { margin-bottom: 8px; }
 
 .question-foot {
-  margin-top: 10px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--j-border);
+  padding-top: 16px;
 }
 
-.badge {
-  font-size: 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 8px;
-  color: var(--text-secondary);
-}
-
-@media (max-width: 900px) {
-  .inline-inputs {
-    grid-template-columns: 1fr;
-  }
+.diff-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--j-surface-2);
+  color: var(--j-text-2);
 }

@@ -1,6 +1,7 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../components/Button'
 import { applicationsAPI } from '../api/client'
+import { Pencil, Trash2, X, FileText } from 'lucide-react'
 import './Applications.css'
 
 const STATUSES = ['Saved', 'Applied', 'Interviewing', 'Offered', 'Rejected']
@@ -20,7 +21,8 @@ function Applications() {
 
   const loadApplications = async () => {
     const response = await applicationsAPI.list()
-    setApplications(response.data || [])
+    const data = response.data
+    setApplications(Array.isArray(data) ? data : (data?.jobs || data?.items || data?.applications || []))
   }
 
   useEffect(() => {
@@ -51,22 +53,22 @@ function Applications() {
   }
 
   return (
-    <div className="applications-page">
+    <div className="applications-page fade-up">
       <div className="page-header">
         <h1>Applications</h1>
         <p className="subtitle">Manage every application in one table.</p>
       </div>
 
       <div className="table-head">
-        <p>{applications.length} applications</p>
-        <Button onClick={() => setShowForm((prev) => !prev)}>+ Add</Button>
+        <p>{applications.length} applications total</p>
+        <Button onClick={() => setShowForm((prev) => !prev)}>+ Add Application</Button>
       </div>
 
       {showForm && (
-        <section className="form-box panel-raised app-form-panel">
+        <section className="form-box app-form-panel fade-up">
           <div className="form-header">
             <div>
-              <p className="section-label">Application form</p>
+              <p className="section-label">APPLICATION FORM</p>
               <h2>{editingId ? 'Edit Application' : 'New Application'}</h2>
             </div>
             <button
@@ -74,17 +76,17 @@ function Applications() {
               className="form-close"
               onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm) }}
             >
-              ×
+              <X size={20} />
             </button>
           </div>
           <div className="form-grid">
             <label>
               <span>Company</span>
-              <input value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="Company" />
+              <input value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} placeholder="E.g. Acme Corp" />
             </label>
             <label>
               <span>Role</span>
-              <input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} placeholder="Role" />
+              <input value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} placeholder="E.g. Frontend Engineer" />
             </label>
             <label>
               <span>Status</span>
@@ -94,7 +96,7 @@ function Applications() {
             </label>
             <label className="span-2">
               <span>Next action</span>
-              <input value={form.next_action} onChange={(event) => setForm({ ...form, next_action: event.target.value })} placeholder="Next action" />
+              <input value={form.next_action} onChange={(event) => setForm({ ...form, next_action: event.target.value })} placeholder="E.g. Follow up on Monday" />
             </label>
           </div>
           <div className="form-actions">
@@ -104,7 +106,7 @@ function Applications() {
         </section>
       )}
 
-      <article className="panel table-panel">
+      <article className="table-panel">
         <table className="apps-table">
           <thead>
             <tr>
@@ -113,7 +115,7 @@ function Applications() {
               <th>Status</th>
               <th>Applied</th>
               <th>Next Action</th>
-              <th>Actions</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -124,11 +126,11 @@ function Applications() {
                   <span>{app.company}</span>
                 </td>
                 <td>{app.role}</td>
-                <td><span className={`status-badge status-${app.status}`}>{app.status}</span></td>
+                <td><span className={`status-pill status-${app.status}`}>{app.status}</span></td>
                 <td>{app.applied_date ? new Date(app.applied_date).toLocaleDateString() : '-'}</td>
                 <td>{app.next_action || '-'}</td>
-                <td>
-                  <button className="icon-btn edit" onClick={() => editRow(app)} aria-label="Edit application">✎</button>
+                <td style={{ textAlign: 'right' }}>
+                  <button className="icon-btn edit" onClick={() => editRow(app)} aria-label="Edit application"><Pencil size={14} /></button>
                   <button
                     className="icon-btn delete"
                     onClick={async () => {
@@ -137,14 +139,15 @@ function Applications() {
                     }}
                     aria-label="Delete application"
                   >
-                    🗑
+                    <Trash2 size={14} />
                   </button>
                 </td>
               </tr>
             )) : (
               <tr>
-                <td colSpan="6" className="empty-state">
-                  <div>
+                <td colSpan="6" className="empty-table-cell">
+                  <div className="empty-state">
+                    <FileText />
                     <p>Nothing here yet.</p>
                     <span>Add your first application to start tracking it.</span>
                   </div>

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { profileAPI } from '../api/client'
+import Button from '../components/Button'
+import { FileUp, UserCircle, Edit2, Trash2, CheckCircle2 } from 'lucide-react'
 import './Profile.css'
 
 export default function Profile() {
@@ -8,14 +10,17 @@ export default function Profile() {
   const [years, setYears] = useState(0)
   const [interests, setInterests] = useState('')
   const [resumeFile, setResumeFile] = useState(null)
+  
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  
   const [profiles, setProfiles] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [editingProfileId, setEditingProfileId] = useState(null)
   const [previewText, setPreviewText] = useState('')
+  
   const [pageIndex, setPageIndex] = useState(1)
-  const [pageSize] = useState(6)
+  const [pageSize] = useState(4)
   const [totalProfiles, setTotalProfiles] = useState(0)
 
   const submit = async (e) => {
@@ -29,28 +34,29 @@ export default function Profile() {
       fd.append('years_experience', String(years))
       fd.append('interests', interests)
       if (resumeFile) fd.append('resume', resumeFile)
+      
       let res
       if (editingProfileId) {
         res = await profileAPI.update(editingProfileId, fd)
-        setMessage(res.data?.message || 'Profile updated')
+        setMessage(res.data?.message || 'Profile updated successfully')
       } else {
         res = await profileAPI.create(fd)
-        setMessage(res.data?.message || 'Profile saved')
-        // if backend returned created id, select it
+        setMessage(res.data?.message || 'Profile created successfully')
         const newId = res.data?.id
         if (newId) {
           try { await profileAPI.select(newId); setSelectedId(newId) } catch (e) { /* ignore */ }
         }
       }
-      // refresh profiles list
       await loadProfiles()
-      // if created, clear form
-      setSkills('')
-      setDegree('')
-      setYears(0)
-      setInterests('')
-      setResumeFile(null)
-      setEditingProfileId(null)
+      
+      // Keep form loaded if edited, or clear if created
+      if (!editingProfileId) {
+        setSkills('')
+        setDegree('')
+        setYears(0)
+        setInterests('')
+        setResumeFile(null)
+      }
     } catch (err) {
       setMessage('Failed to save profile')
     } finally {
@@ -70,36 +76,37 @@ export default function Profile() {
     }
   }
 
-  useEffect(() => {
-    loadProfiles()
-  }, [])
+  useEffect(() => { loadProfiles() }, [pageIndex])
 
   const handleSelect = async (id) => {
     try {
       await profileAPI.select(id)
       setSelectedId(id)
-      setMessage('Selected profile ' + id)
+      setMessage('Active profile updated')
     } catch (e) {
-      setMessage('Failed to select profile')
+      setMessage('Failed to set active profile')
     }
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete profile?')) return
+    if (!window.confirm('Delete this profile permanently?')) return
     try {
       await profileAPI.delete(id)
-      setMessage('Deleted profile ' + id)
-      // reload current page
+      setMessage('Profile deleted')
       await loadProfiles()
       if (selectedId === id) setSelectedId(null)
+      if (editingProfileId === id) {
+        setEditingProfileId(null)
+        setSkills('')
+        setDegree('')
+        setYears(0)
+        setInterests('')
+      }
     } catch (e) {
-      setMessage('Failed to delete')
+      setMessage('Failed to delete profile')
     }
   }
 
-  useEffect(() => { loadProfiles() }, [pageIndex])
-
-  // parse stored resume_text to prefill fields when editing
   const parseProfileText = (text) => {
     const out = { skills: '', degree: '', years: '', interests: '', resume: '' }
     if (!text) return out
@@ -120,7 +127,6 @@ export default function Profile() {
     return out
   }
 
-  // fetch and show full profile on selection (preview)
   useEffect(() => {
     if (!selectedId) {
       setPreviewText('')
@@ -148,88 +154,146 @@ export default function Profile() {
           setDegree(parsed.degree || '')
           setYears(parsed.years || 0)
           setInterests(parsed.interests || '')
-          setPreviewText(parsed.resume || '')
           setEditingProfileId(p.id)
-          setMessage('Editing profile ' + p.id)
+          setMessage('Loaded profile for editing')
         }
       } catch (e) {
-        setMessage('Failed to load profile for editing')
+        setMessage('Failed to load profile details')
       }
     })()
   }
 
+  const clearForm = () => {
+    setEditingProfileId(null)
+    setSkills('')
+    setDegree('')
+    setYears(0)
+    setInterests('')
+    setResumeFile(null)
+    setMessage('')
+  }
+
   return (
-    <div className="profile-page">
+    <div className="profile-page fade-up">
       <div className="page-header">
         <h1>My Profile</h1>
-        <p className="subtitle">Tell us about your background so we can match jobs better.</p>
+        <p className="subtitle">Manage your background information to get better job matches.</p>
       </div>
 
-      <form onSubmit={submit} className="profile-form">
-          <div className="profiles-list">
+      <div className="profile-layout">
+        <form className="profile-card fade-up" onSubmit={submit}>
+          <h3>{editingProfileId ? 'Edit Profile' : 'Create New Profile'}</h3>
+          
+          <div className="form-group">
+            <label className="field-label">Domain Skills</label>
+            <textarea 
+              className="field-input" 
+              rows={3}
+              value={skills} 
+              onChange={(e) => setSkills(e.target.value)} 
+              placeholder="e.g. React, Node.js, System Design..."
+            />
+          </div>
+
+          <div className="form-group row">
+            <div>
+              <label className="field-label">Degree / Education</label>
+              <input className="field-input" value={degree} onChange={(e) => setDegree(e.target.value)} placeholder="e.g. BS Computer Science" />
+            </div>
+            <div>
+              <label className="field-label">Years Exp.</label>
+              <input className="field-input" type="number" value={years} onChange={(e) => setYears(e.target.value)} min={0} />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="field-label">Career Interests</label>
+            <textarea 
+              className="field-input" 
+              rows={2}
+              value={interests} 
+              onChange={(e) => setInterests(e.target.value)} 
+              placeholder="e.g. Fintech, Open Source..."
+            />
+          </div>
+
+          <div className="form-group">
+            <span className="field-label">Base Resume (Optional)</span>
+            <label className="file-upload-lbl">
+              <FileUp size={20} color="var(--j-text-3)" />
+              <p>{resumeFile ? resumeFile.name : 'Upload PDF or DOCX'}</p>
+              <input type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files[0])} />
+            </label>
+          </div>
+
+          <div className="form-actions">
+            <Button type="submit" loading={loading}>{editingProfileId ? 'Update Profile' : 'Save Profile'}</Button>
+            {editingProfileId && (
+              <Button type="button" variant="secondary" onClick={clearForm}>Cancel Edit</Button>
+            )}
+          </div>
+
+          {message && <div className="status-msg">{message}</div>}
+        </form>
+
+        <div className="profile-card fade-up">
+          <h3>Saved Profiles</h3>
+          
+          <div className="saved-profiles-list">
             {profiles.length === 0 ? (
-              <div className="profiles-empty">No saved profiles</div>
+              <p className="status-msg">No profiles saved yet. Create one to get started.</p>
             ) : (
-              profiles.map((p) => (
-                <div key={p.id} className={"profile-item" + (selectedId === p.id ? ' active' : '')}>
-                  <div className="profile-meta">
-                    <strong>Profile {p.id}</strong>
-                    <div className="profile-skills">{p.skills}</div>
+              profiles.map(p => (
+                <div key={p.id} className={`saved-profile-card ${selectedId === p.id ? 'active' : ''}`}>
+                  <div className="sp-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <UserCircle size={16} color="var(--j-text-2)" />
+                      <span className="sp-title">Profile #{p.id}</span>
+                    </div>
+                    {selectedId === p.id && <span className="sp-badge">Active</span>}
                   </div>
-                  <div className="profile-actions">
-                    <button type="button" className="btn" onClick={() => handleSelect(p.id)}>{selectedId === p.id ? 'Selected' : 'Select'}</button>
-                    <button type="button" className="btn" onClick={() => handleEdit(p)}>Edit</button>
-                    <button type="button" className="btn" onClick={() => handleDelete(p.id)}>Delete</button>
+                  
+                  <div className="sp-body">
+                    {p.skills && <p><strong>Skills:</strong> {p.skills}</p>}
+                    {(p.degree || p.years_experience) && <p>{p.degree || 'No degree'} • {p.years_experience || 0} yrs exp</p>}
+                  </div>
+                  
+                  <div className="sp-actions">
+                    {selectedId !== p.id && (
+                      <button className="sel" type="button" onClick={() => handleSelect(p.id)}>
+                        <CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-bottom' }}/> Set Active
+                      </button>
+                    )}
+                    <button type="button" onClick={() => handleEdit(p)}>
+                      <Edit2 size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-bottom' }}/> Edit
+                    </button>
+                    <button className="del" type="button" onClick={() => handleDelete(p.id)}>
+                      <Trash2 size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-bottom' }}/> Delete
+                    </button>
                   </div>
                 </div>
               ))
             )}
           </div>
-          <div className="profiles-pager" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <div>
-              <button className="btn" type="button" onClick={() => setPageIndex(Math.max(1, pageIndex - 1))}>Previous</button>
-              <button className="btn" type="button" onClick={() => setPageIndex(pageIndex + 1)} style={{ marginLeft: 8 }}>Next</button>
-            </div>
-            <div className="muted-text">Page {pageIndex} · {totalProfiles} profiles</div>
-          </div>
-          {previewText && (
-            <div className="profile-preview" style={{ marginTop: 12 }}>
-              <h4>Resume Preview</h4>
-              <div style={{ whiteSpace: 'pre-wrap', background: 'white', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>{previewText}</div>
+
+          {totalProfiles > pageSize && (
+            <div className="pager-ctrl">
+              <span className="pager-muted">Page {pageIndex} of {Math.ceil(totalProfiles / pageSize)}</span>
+              <div className="pager-btns">
+                <button disabled={pageIndex === 1} onClick={() => setPageIndex(p => Math.max(1, p - 1))}>Prev</button>
+                <button disabled={pageIndex * pageSize >= totalProfiles} onClick={() => setPageIndex(p => p + 1)}>Next</button>
+              </div>
             </div>
           )}
-        <div className="form-row">
-          <label className="field-label">Skills (comma separated)</label>
-          <textarea className="field-input" value={skills} onChange={(e) => setSkills(e.target.value)} />
-        </div>
 
-        <div className="form-row two-col">
-          <div className="col">
-            <label className="field-label">Degree</label>
-            <input className="field-input" value={degree} onChange={(e) => setDegree(e.target.value)} />
-          </div>
-          <div className="col">
-            <label className="field-label">Years of experience</label>
-            <input className="field-input" type="number" value={years} onChange={(e) => setYears(e.target.value)} />
-          </div>
+          {previewText && (
+            <div className="preview-box fade-up">
+              <span className="field-label">ACTIVE PROfILE RESUME TEXT</span>
+              <div className="preview-content">{previewText}</div>
+            </div>
+          )}
         </div>
-
-        <div className="form-row">
-          <label className="field-label">Interests</label>
-          <textarea className="field-input" value={interests} onChange={(e) => setInterests(e.target.value)} />
-        </div>
-
-        <div className="form-row">
-          <label className="field-label">Upload resume (PDF or DOCX)</label>
-          <input className="field-input file-input" type="file" accept=".pdf,.docx" onChange={(e) => setResumeFile(e.target.files[0])} />
-        </div>
-
-        <div className="form-row actions">
-          <button className="btn primary" type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Profile'}</button>
-        </div>
-      </form>
-
-      {message && <p className="muted-text message">{message}</p>}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import Button from '../components/Button'
 import { intelligenceAPI } from '../api/client'
+import { Plus, X, BarChart2 } from 'lucide-react'
 import './SkillGap.css'
 
 function SkillGap() {
@@ -11,6 +12,15 @@ function SkillGap() {
   const updateDescription = (index, value) => {
     const next = [...jobDescriptions]
     next[index] = value
+    setJobDescriptions(next)
+  }
+
+  const removeDescription = (index) => {
+    if (jobDescriptions.length === 1) {
+      setJobDescriptions([''])
+      return
+    }
+    const next = jobDescriptions.filter((_, i) => i !== index)
     setJobDescriptions(next)
   }
 
@@ -26,37 +36,54 @@ function SkillGap() {
   }
 
   return (
-    <div className="skill-gap-page">
+    <div className="skill-gap-page fade-up">
       <div className="page-header">
-        <h1>Skill Gap</h1>
-        <p className="subtitle">Compare job requirements and identify missing skills.</p>
+        <h1>Skill Gap Analysis</h1>
+        <p className="subtitle">Compare multiple job descriptions to find the most requested missing skills.</p>
       </div>
 
-      <section className="skill-form">
+      <section className="panel-card fade-up">
         {jobDescriptions.map((description, index) => (
-          <textarea
-            key={index}
-            value={description}
-            onChange={(event) => updateDescription(index, event.target.value)}
-            rows={4}
-            placeholder={`Job description ${index + 1}`}
-          />
+          <div key={index} className="jd-box fade-up">
+            <span className="field-label">JOB DESCRIPTION {index + 1}</span>
+            <textarea
+              className="text-area"
+              value={description}
+              onChange={(event) => updateDescription(index, event.target.value)}
+              rows={4}
+              placeholder="Paste job description text here..."
+              style={{ marginBottom: 16 }}
+            />
+            <button className="close-btn" type="button" onClick={() => removeDescription(index)} aria-label="Remove box">
+              <X size={14} />
+            </button>
+          </div>
         ))}
-        <div className="actions">
-          <Button variant="secondary" onClick={() => setJobDescriptions((prev) => [...prev, ''])}>Add Another</Button>
-          <Button onClick={analyze} loading={loading}>Analyze Skills</Button>
+        
+        <div className="sg-actions">
+          <Button variant="secondary" onClick={() => setJobDescriptions((prev) => [...prev, ''])}>
+            <Plus size={14} style={{ display: 'inline', marginRight: 4 }}/> Add Another Job
+          </Button>
+          <Button onClick={analyze} loading={loading} disabled={!jobDescriptions[0].trim()}>
+            <BarChart2 size={14} style={{ display: 'inline', marginRight: 4 }}/> Analyze Skill Frequencies
+          </Button>
         </div>
       </section>
 
       {result && (
-        <section className="result-box">
-          <p className="section-label">MISSING SKILLS</p>
-          {(result.missing_skills || []).map((skill) => (
-            <div className="skill-row" key={skill}>
-              <span>{skill}</span>
-              <small>Appears in {result.frequency?.[skill] || 0} job(s)</small>
-            </div>
-          ))}
+        <section className="sg-results fade-up">
+          <span className="field-label" style={{ marginBottom: 24 }}>MISSING SKILLS (BY FREQUENCY)</span>
+          
+          {(result.missing_skills || []).length === 0 ? (
+            <p className="text-area" style={{ border: 'none', background: 'transparent' }}>No missing skills found. You match perfectly!</p>
+          ) : (
+            (result.missing_skills || []).map((skill) => (
+              <div className="skill-row fade-up" key={skill}>
+                <span className="skill-name">{skill}</span>
+                <span className="skill-meta">Appears in {result.frequency?.[skill] || 0} job{result.frequency?.[skill] !== 1 ? 's' : ''}</span>
+              </div>
+            ))
+          )}
         </section>
       )}
     </div>

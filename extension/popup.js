@@ -6,7 +6,8 @@ document.getElementById('sendUrl').addEventListener('click', async () => {
   try {
     let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
-    const response = await fetch('http://localhost:8000/extension/analyze-url', {
+    const API_URL = (typeof EXTENSION_API_URL !== 'undefined' ? EXTENSION_API_URL : 'http://localhost:8000');
+    const response = await fetch(API_URL + '/extension/analyze-url', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ url: tab.url })

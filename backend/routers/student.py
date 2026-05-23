@@ -7,12 +7,18 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import Integer, and_, exists, func, or_, select
+from sqlalchemy import Integer, and_, exists, func, inspect, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
-from backend.database import get_db
-from backend.models import Program, Scholarship, SavedProgram, StudentProfile, StudyApplication, University, UniversityMatchCache
+from backend.database import engine, get_db
+from backend.models import Program, Scholarship, SavedProgram, StudentProfile, StudyApplication, University, UniversityMatchCache, User, UserPreference
+from backend.security import get_current_user
+import threading
+import os
+
+# Allow disabling indexing during local/dev runs to avoid slow LLM/embedding calls
+DISABLE_INDEXING = os.getenv('DISABLE_INDEXING', '').strip().lower() == 'true'
 from backend.security import require_current_user
 from backend.schemas import (
     ProgramOut,
@@ -22,6 +28,7 @@ from backend.schemas import (
     UniversityFilterResponse,
     UniversityProgramGroup,
     StudentProfileCreate,
+    StudentProfileListResponse,
     StudentProfileOut,
     StudentProfileUpdate,
     StudentProgramMatchOut,
@@ -44,6 +51,7 @@ api_router = APIRouter(prefix="/api/student", tags=["Student Search"], dependenc
 
 MATCH_CACHE_TTL_DAYS = 7
 logger = logging.getLogger(__name__)
+_student_preferences_ready = False
 
 
 def _match_service():
@@ -65,6 +73,65 @@ def _profile_to_dict(profile: StudentProfile) -> dict:
         "degree_level": profile.degree_level,
         "academic_background": profile.academic_background,
     }
+
+
+def _ensure_student_preferences_storage() -> None:
+    global _student_preferences_ready
+    if _student_preferences_ready:
+        return
+
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table(UserPreference.__tablename__):
+            UserPreference.__table__.create(bind=engine, checkfirst=True)
+            inspector = inspect(engine)
+
+        columns = {column["name"] for column in inspector.get_columns(UserPreference.__tablename__)}
+        if "selected_student_profile_id" not in columns:
+            with engine.begin() as connection:
+                connection.exec_driver_sql(f"ALTER TABLE {UserPreference.__tablename__} ADD COLUMN selected_student_profile_id INTEGER")
+        _student_preferences_ready = True
+    except Exception:
+        pass
+
+
+def _get_selected_student_preference(db: Session, user_id: int) -> UserPreference | None:
+    _ensure_student_preferences_storage()
+    try:
+        return (
+            db.query(UserPreference)
+            .filter(UserPreference.user_id == user_id)
+            .order_by(UserPreference.updated_at.desc(), UserPreference.id.desc())
+            .first()
+        )
+    except Exception:
+        return None
+
+
+def _get_selected_student_profile_id(db: Session, user_id: int) -> int | None:
+    preference = _get_selected_student_preference(db, user_id)
+    if preference and preference.selected_student_profile_id:
+        return int(preference.selected_student_profile_id)
+    return None
+
+
+def _set_selected_student_profile_id(db: Session, user_id: int, profile_id: int) -> None:
+    _ensure_student_preferences_storage()
+    preference = _get_selected_student_preference(db, user_id)
+    if not preference:
+        preference = UserPreference(user_id=user_id, selected_student_profile_id=profile_id)
+        db.add(preference)
+    else:
+        preference.selected_student_profile_id = profile_id
+    db.commit()
+
+
+def _clear_selected_student_profile_if_matches(db: Session, user_id: int, profile_id: int) -> None:
+    _ensure_student_preferences_storage()
+    preference = _get_selected_student_preference(db, user_id)
+    if preference and preference.selected_student_profile_id == profile_id:
+        preference.selected_student_profile_id = None
+        db.commit()
 
 
 def _program_to_dict(program: Program) -> dict:
@@ -269,11 +336,12 @@ def university_detail(university_id: int, db: Session = Depends(get_db)):
     )
 
 
-def _cache_lookup(db: Session, student_profile_id: int, program_id: int, intended_major: str) -> UniversityMatchCache | None:
+def _cache_lookup(db: Session, user_id: int, student_profile_id: int, program_id: int, intended_major: str) -> UniversityMatchCache | None:
     now = datetime.utcnow()
     cache = (
         db.query(UniversityMatchCache)
         .filter(
+            UniversityMatchCache.user_id == user_id,
             UniversityMatchCache.student_profile_id == student_profile_id,
             UniversityMatchCache.program_id == program_id,
             UniversityMatchCache.intended_major == intended_major,
@@ -286,8 +354,9 @@ def _cache_lookup(db: Session, student_profile_id: int, program_id: int, intende
 
 @router.post("/profile", response_model=StudentProfileOut)
 @api_router.post("/profile", response_model=StudentProfileOut)
-def create_student_profile(payload: StudentProfileCreate, db: Session = Depends(get_db)):
+def create_student_profile(payload: StudentProfileCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     profile = StudentProfile(
+        user_id=current_user.id,
         gpa=payload.gpa,
         gre_score=payload.gre_score,
         toefl_score=payload.toefl_score,
@@ -301,25 +370,90 @@ def create_student_profile(payload: StudentProfileCreate, db: Session = Depends(
     db.add(profile)
     db.commit()
     db.refresh(profile)
+    _set_selected_student_profile_id(db, current_user.id, profile.id)
+    # Index embeddings asynchronously to avoid blocking the request on slow
+    # embedding/model calls. Run in a daemon thread so the request returns
+    # promptly even when the vector DB or LLM provider is slow or unavailable.
     try:
-        _match_service().index_student_profile_embedding(profile)
+        if not DISABLE_INDEXING:
+            threading.Thread(target=_match_service().index_student_profile_embedding, args=(profile,), daemon=True).start()
     except Exception:
         pass
     return profile
 
 
 @api_router.get("/profile", response_model=StudentProfileOut)
-def get_current_student_profile(db: Session = Depends(get_db)):
-    profile = db.query(StudentProfile).order_by(StudentProfile.created_at.desc(), StudentProfile.id.desc()).first()
+def get_current_student_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    selected_id = _get_selected_student_profile_id(db, current_user.id)
+    profile = None
+    if selected_id:
+        profile = db.query(StudentProfile).filter(StudentProfile.id == selected_id, StudentProfile.user_id == current_user.id).first()
+    if not profile:
+        profile = db.query(StudentProfile).filter(StudentProfile.user_id == current_user.id).order_by(StudentProfile.created_at.desc(), StudentProfile.id.desc()).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
     return profile
 
 
+@router.get("/profiles", response_model=StudentProfileListResponse)
+@api_router.get("/profiles", response_model=StudentProfileListResponse)
+def list_student_profiles(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profiles = (
+        db.query(StudentProfile)
+        .filter(StudentProfile.user_id == current_user.id)
+        .order_by(StudentProfile.created_at.desc(), StudentProfile.id.desc())
+        .all()
+    )
+    selected_id = _get_selected_student_profile_id(db, current_user.id)
+    if selected_id and not any(profile.id == selected_id for profile in profiles):
+        _clear_selected_student_profile_if_matches(db, current_user.id, selected_id)
+        selected_id = None
+    return StudentProfileListResponse(
+        selected_profile_id=selected_id,
+        profiles=[StudentProfileOut.model_validate(profile) for profile in profiles],
+    )
+
+
+@router.post("/profile/select/{profile_id}")
+@api_router.post("/profile/select/{profile_id}")
+def select_student_profile(profile_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(StudentProfile).filter(StudentProfile.id == profile_id, StudentProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    _set_selected_student_profile_id(db, current_user.id, profile_id)
+    return {"status": "success", "selected_profile_id": profile_id}
+
+
+@router.delete("/profile/{profile_id}")
+@api_router.delete("/profile/{profile_id}")
+def delete_student_profile(profile_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(StudentProfile).filter(StudentProfile.id == profile_id, StudentProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    db.delete(profile)
+    db.commit()
+    _clear_selected_student_profile_if_matches(db, current_user.id, profile_id)
+
+    next_selected = _get_selected_student_profile_id(db, current_user.id)
+    if not next_selected:
+        fallback = (
+            db.query(StudentProfile)
+            .filter(StudentProfile.user_id == current_user.id)
+            .order_by(StudentProfile.created_at.desc(), StudentProfile.id.desc())
+            .first()
+        )
+        if fallback:
+            _set_selected_student_profile_id(db, current_user.id, fallback.id)
+            next_selected = fallback.id
+
+    return {"status": "success", "selected_profile_id": next_selected}
+
+
 @router.patch("/profile/{profile_id}", response_model=StudentProfileOut)
 @api_router.patch("/profile/{profile_id}", response_model=StudentProfileOut)
-def update_student_profile(profile_id: int, payload: StudentProfileUpdate, db: Session = Depends(get_db)):
-    profile = db.query(StudentProfile).filter(StudentProfile.id == profile_id).first()
+def update_student_profile(profile_id: int, payload: StudentProfileUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(StudentProfile).filter(StudentProfile.id == profile_id, StudentProfile.user_id == current_user.id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
@@ -329,29 +463,32 @@ def update_student_profile(profile_id: int, payload: StudentProfileUpdate, db: S
 
     db.commit()
     db.refresh(profile)
+    # Schedule re-indexing asynchronously on profile update.
     try:
-        _match_service().index_student_profile_embedding(profile)
+        if not DISABLE_INDEXING:
+            threading.Thread(target=_match_service().index_student_profile_embedding, args=(profile,), daemon=True).start()
     except Exception:
         pass
     return profile
 
 
 @api_router.get("/profile/{profile_id}", response_model=StudentProfileOut)
-def get_student_profile(profile_id: int, db: Session = Depends(get_db)):
-    profile = db.query(StudentProfile).filter(StudentProfile.id == profile_id).first()
+def get_student_profile(profile_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(StudentProfile).filter(StudentProfile.id == profile_id, StudentProfile.user_id == current_user.id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
     return profile
 
 
 @router.post("/recommend", response_model=UniversityRecommendationResponse)
-async def recommend_universities(payload: UniversityRecommendationRequest, db: Session = Depends(get_db)):
+@api_router.post("/recommend", response_model=UniversityRecommendationResponse)
+async def recommend_universities(payload: UniversityRecommendationRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         from core.rag_service import generate_match_analysis_async
     except Exception as exc:
         raise HTTPException(status_code=503, detail="University recommendation dependencies are unavailable") from exc
 
-    student_profile = db.query(StudentProfile).filter(StudentProfile.id == payload.student_profile_id).first()
+    student_profile = db.query(StudentProfile).filter(StudentProfile.id == payload.student_profile_id, StudentProfile.user_id == current_user.id).first()
     if not student_profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
@@ -381,12 +518,36 @@ async def recommend_universities(payload: UniversityRecommendationRequest, db: S
     now = datetime.utcnow()
     expires_at = now + timedelta(days=MATCH_CACHE_TTL_DAYS)
 
+    if DISABLE_INDEXING:
+        for program in matching_programs[:10]:
+            university = db.query(University).filter(University.id == program.university_id).first()
+            if not university:
+                continue
+            ranking_value = university.ranking_global if university.ranking_global is not None else (_safe_int(university.ranking) or 9999)
+            tuition_value = int(program.estimated_tuition_fees or 0)
+            fit_score = max(50, min(98, 98 - min(30, ranking_value // 5) - min(18, tuition_value // 2000)))
+            recommendations.append(
+                UniversityRecommendationItem(
+                    university=UniversityOut.model_validate(university),
+                    program=ProgramOut.model_validate(program),
+                    match_score=int(fit_score),
+                    explanation="Quick dev fallback recommendation while indexing is disabled.",
+                    cached=False,
+                    cache_expires_at=None,
+                )
+            )
+
+        return UniversityRecommendationResponse(
+            student_profile=StudentProfileOut.model_validate(student_profile),
+            recommendations=recommendations,
+        )
+
     for program in matching_programs:
         university = db.query(University).filter(University.id == program.university_id).first()
         if not university:
             continue
 
-        cached = _cache_lookup(db, student_profile.id, program.id, intended_major)
+        cached = _cache_lookup(db, current_user.id, student_profile.id, program.id, intended_major)
         if cached:
             recommendations.append(
                 UniversityRecommendationItem(
@@ -409,6 +570,7 @@ async def recommend_universities(payload: UniversityRecommendationRequest, db: S
         )
 
         cache_row = UniversityMatchCache(
+            user_id=current_user.id,
             student_profile_id=student_profile.id,
             program_id=program.id,
             intended_major=intended_major,
@@ -478,8 +640,8 @@ def _match_row_to_out(match_payload: Dict[str, Any], db: Session | None = None) 
 
 
 @api_router.post("/match/recommend", response_model=UniversityMatchRecommendResponse)
-def match_recommend(payload: UniversityMatchRecommendRequest, db: Session = Depends(get_db)):
-    student_profile = db.query(StudentProfile).filter(StudentProfile.id == payload.student_profile_id).first()
+def match_recommend(payload: UniversityMatchRecommendRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    student_profile = db.query(StudentProfile).filter(StudentProfile.id == payload.student_profile_id, StudentProfile.user_id == current_user.id).first()
     if not student_profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
@@ -490,7 +652,7 @@ def match_recommend(payload: UniversityMatchRecommendRequest, db: Session = Depe
         )
 
     try:
-        candidates = _match_service().retrieve_similar_programs(student_profile.id, limit=max(payload.limit * 3, payload.limit), db=db)
+        candidates = _match_service().retrieve_similar_programs(student_profile.id, current_user.id, limit=max(payload.limit * 3, payload.limit), db=db)
     except Exception as exc:
         logger.exception("University recommendation candidate retrieval failed for student_profile_id=%s", student_profile.id)
         return UniversityMatchRecommendResponse(
@@ -514,7 +676,7 @@ def match_recommend(payload: UniversityMatchRecommendRequest, db: Session = Depe
             continue
 
         try:
-            match_payload = _match_service().get_match_for_program(student_profile.id, int(candidate["program_id"]), db)
+            match_payload = _match_service().get_match_for_program(student_profile.id, int(candidate["program_id"]), current_user.id, db)
         except Exception:
             logger.exception(
                 "University recommendation scoring failed for student_profile_id=%s program_id=%s",
@@ -584,21 +746,21 @@ def _match_detail_response(student_profile: StudentProfile, match_payload: Dict[
 
 
 @api_router.get("/match/program/{program_id}", response_model=UniversityMatchDetailResponse)
-def match_program(program_id: int, student_profile_id: int, db: Session = Depends(get_db)):
-    student_profile = db.query(StudentProfile).filter(StudentProfile.id == student_profile_id).first()
+def match_program(program_id: int, student_profile_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    student_profile = db.query(StudentProfile).filter(StudentProfile.id == student_profile_id, StudentProfile.user_id == current_user.id).first()
     if not student_profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
     try:
-        match_payload = _match_service().get_match_for_program(student_profile_id, program_id, db)
+        match_payload = _match_service().get_match_for_program(student_profile_id, program_id, current_user.id, db)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _match_detail_response(student_profile, match_payload, db=db)
 
 
 @api_router.get("/match/explain", response_model=UniversityMatchDetailResponse)
-def match_explain(student_profile_id: int, program_id: int, db: Session = Depends(get_db)):
-    return match_program(program_id=program_id, student_profile_id=student_profile_id, db=db)
+def match_explain(student_profile_id: int, program_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return match_program(program_id=program_id, student_profile_id=student_profile_id, current_user=current_user, db=db)
 
 
 def _saved_program_out(saved_program: SavedProgram, program: Program, university: University) -> SavedProgramOut:
@@ -633,8 +795,8 @@ def _study_application_out(application: StudyApplication, program: Program, univ
 
 
 @api_router.post("/save")
-def save_program(payload: StudentSaveRequest, db: Session = Depends(get_db)):
-    student = db.query(StudentProfile).filter(StudentProfile.id == payload.student_id).first()
+def save_program(payload: StudentSaveRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    student = db.query(StudentProfile).filter(StudentProfile.id == payload.student_id, StudentProfile.user_id == current_user.id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
@@ -644,13 +806,13 @@ def save_program(payload: StudentSaveRequest, db: Session = Depends(get_db)):
 
     existing = (
         db.query(SavedProgram)
-        .filter(SavedProgram.student_id == payload.student_id, SavedProgram.program_id == payload.program_id)
+        .filter(SavedProgram.user_id == current_user.id, SavedProgram.student_id == payload.student_id, SavedProgram.program_id == payload.program_id)
         .first()
     )
     if existing:
         return {"status": "success", "saved": True, "id": existing.id}
 
-    saved = SavedProgram(student_id=payload.student_id, program_id=payload.program_id)
+    saved = SavedProgram(user_id=current_user.id, student_id=payload.student_id, program_id=payload.program_id)
     db.add(saved)
     db.commit()
     db.refresh(saved)
@@ -658,12 +820,12 @@ def save_program(payload: StudentSaveRequest, db: Session = Depends(get_db)):
 
 
 @api_router.get("/saved/{student_id}")
-def list_saved_programs(student_id: int, db: Session = Depends(get_db)):
+def list_saved_programs(student_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = (
         db.query(SavedProgram, Program, University)
         .join(Program, Program.id == SavedProgram.program_id)
         .join(University, University.id == Program.university_id)
-        .filter(SavedProgram.student_id == student_id)
+        .filter(SavedProgram.user_id == current_user.id, SavedProgram.student_id == student_id)
         .order_by(SavedProgram.saved_at.desc())
         .all()
     )
@@ -674,8 +836,8 @@ def list_saved_programs(student_id: int, db: Session = Depends(get_db)):
 
 
 @api_router.post("/apply")
-def apply_program(payload: StudentApplyRequest, db: Session = Depends(get_db)):
-    student = db.query(StudentProfile).filter(StudentProfile.id == payload.student_id).first()
+def apply_program(payload: StudentApplyRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    student = db.query(StudentProfile).filter(StudentProfile.id == payload.student_id, StudentProfile.user_id == current_user.id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
@@ -684,6 +846,7 @@ def apply_program(payload: StudentApplyRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Program not found")
 
     application = StudyApplication(
+        user_id=current_user.id,
         student_id=payload.student_id,
         program_id=payload.program_id,
         status="applied",
@@ -698,8 +861,8 @@ def apply_program(payload: StudentApplyRequest, db: Session = Depends(get_db)):
 
 
 @api_router.put("/applications/{application_id}")
-def update_study_application(application_id: int, payload: StudyApplicationUpdate, db: Session = Depends(get_db)):
-    application = db.query(StudyApplication).filter(StudyApplication.id == application_id).first()
+def update_study_application(application_id: int, payload: StudyApplicationUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    application = db.query(StudyApplication).filter(StudyApplication.id == application_id, StudyApplication.user_id == current_user.id).first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
@@ -712,12 +875,12 @@ def update_study_application(application_id: int, payload: StudyApplicationUpdat
 
 
 @api_router.get("/applications/{student_id}")
-def list_study_applications(student_id: int, db: Session = Depends(get_db)):
+def list_study_applications(student_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = (
         db.query(StudyApplication, Program, University)
         .join(Program, Program.id == StudyApplication.program_id)
         .join(University, University.id == Program.university_id)
-        .filter(StudyApplication.student_id == student_id)
+        .filter(StudyApplication.user_id == current_user.id, StudyApplication.student_id == student_id)
         .order_by(StudyApplication.updated_at.desc())
         .all()
     )

@@ -22,6 +22,7 @@ from core.scheduler import start_scheduler_if_enabled
 from alembic.config import Config
 from alembic import command
 from backend.middleware.logging import RequestLoggingMiddleware, configure_logging, standard_error_response
+from backend.middleware.security import HTTPSRedirectMiddleware
 from backend.routers.jobs import shutdown_background_executor
 
 configure_logging()
@@ -129,7 +130,7 @@ def _run_startup_migrations() -> None:
 # Initialize database / run migrations automatically on startup
 try:
     _run_startup_migrations()
-    print("Alembic migrations applied successfully on startup.")
+    logger.info("Alembic migrations applied successfully on startup.")
 except Exception:
     logger.exception("Alembic migration or schema validation failed on startup")
     raise
@@ -156,6 +157,11 @@ app.add_middleware(
     period=int(os.getenv("RATE_LIMIT_PERIOD", "60")),
 )
 
+app.add_middleware(
+    HTTPSRedirectMiddleware,
+    enabled=os.getenv("ENV", "").lower() == "production"
+)
+
 app.add_middleware(RequestLoggingMiddleware)
 
 # Include original routers
@@ -165,7 +171,6 @@ app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(cover_letter.router)
 app.include_router(intelligence.router)
-app.include_router(student.router)
 app.include_router(student.api_router)
 app.include_router(profile.router)
 

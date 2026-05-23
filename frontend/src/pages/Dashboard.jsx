@@ -1,16 +1,10 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { applicationsAPI } from '../api/client'
+import { Briefcase, Calendar, Award, Activity, ArrowRight, CheckCircle2 } from 'lucide-react'
 import './Dashboard.css'
 
 const STATUS_ORDER = ['Saved', 'Applied', 'Interviewing', 'Offered', 'Rejected']
-const STATUS_BAR_CLASS = {
-  Saved: 'bar-saved',
-  Applied: 'bar-applied',
-  Interviewing: 'bar-interviewing',
-  Offered: 'bar-offered',
-  Rejected: 'bar-rejected',
-}
 
 function parseSkillsFromStorage() {
   const keys = ['jobsync_resume_analysis_history', 'jobsync_resume_analyses', 'jobsync_job_analyses', 'jobsync_analysis_history']
@@ -60,7 +54,10 @@ function Dashboard() {
 
   useEffect(() => {
     applicationsAPI.healthScore().then((res) => setHealth(res.data)).catch(() => setHealth(null))
-    applicationsAPI.list().then((res) => setApplications(res.data || [])).catch(() => setApplications([]))
+    applicationsAPI.list().then((res) => {
+      const data = res.data
+      setApplications(Array.isArray(data) ? data : (data?.jobs || data?.items || data?.applications || []))
+    }).catch(() => setApplications([]))
   }, [])
 
   const stats = useMemo(() => {
@@ -97,140 +94,167 @@ function Dashboard() {
     return '/'
   }
 
+  const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date())
+
   return (
     <div className="dashboard-page">
       <div className="page-header">
         <h1>Dashboard</h1>
-        <p className="subtitle">Track your weekly application health and execution.</p>
+        <p className="subtitle">{today}</p>
       </div>
 
-      <section className="health-card panel-raised">
+      <section className="health-banner fade-up">
         <div className="health-left">
-          <p className="score-value">{health?.score ?? 0}</p>
-          <p className={`grade ${getGradeClass(health?.grade || 'F')}`}>{health?.grade || 'F'}</p>
+          <div className="health-score">{health?.score ?? 0}</div>
+          <div className={`health-grade ${getGradeClass(health?.grade || 'F')}`}>Grade {health?.grade || 'F'}</div>
         </div>
 
         <div className="health-middle">
-          <p>{health?.status_message || 'Health score is loading...'}</p>
-          <p className="streak">{health?.streak ?? 0} day streak</p>
+          <div className="health-status">{health?.status_message || 'Health score active'}</div>
+          <div className="health-streak">{health?.streak ?? 0} day tracking streak</div>
         </div>
 
         <div className="health-right">
-          <p className="section-label">Suggested Actions</p>
-          {topImprovements.map((item, index) => (
-            <label key={`${item}-${index}`} className="improvement-row">
-              <input
-                type="checkbox"
-                checked={!!checked[index]}
-                onChange={(event) => setChecked((prev) => ({ ...prev, [index]: event.target.checked }))}
-              />
-              <Link to={improvementLink(item)}>{item}</Link>
-              <span>{pointsFromText(item)}</span>
-            </label>
-          ))}
+          <div className="section-title">SUGGESTED ACTIONS</div>
+          <div className="improvements-list">
+            {topImprovements.map((item, index) => (
+              <label key={`${item}-${index}`} className="improvement-item">
+                <input
+                  type="checkbox"
+                  checked={!!checked[index]}
+                  onChange={(event) => setChecked((prev) => ({ ...prev, [index]: event.target.checked }))}
+                />
+                <Link to={improvementLink(item)} className="improvement-text">{item}</Link>
+                <span className="improvement-pts">{pointsFromText(item)}</span>
+              </label>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="stats-row">
-        <article className="stat-card stat-card-total left-accent">
-          <p className="section-label">TOTAL APPLICATIONS</p>
-          <p className="stat-value">{stats.total}</p>
-          <p className="muted">Active pipeline size</p>
+      <section className="stats-grid">
+        <article className="stat-card fade-up" style={{ animationDelay: '0.05s' }}>
+          <Briefcase className="stat-icon" size={16} />
+          <div className="stat-label">TOTAL APPLICATIONS</div>
+          <div className="stat-value">{stats.total}</div>
+          <div className="stat-desc">Active pipeline size</div>
         </article>
-        <article className="stat-card stat-card-interviews">
-          <p className="section-label">INTERVIEWS SCHEDULED</p>
-          <p className="stat-value">{stats.interviews}</p>
-          <p className="muted">In progress this cycle</p>
+        <article className="stat-card fade-up" style={{ animationDelay: '0.1s' }}>
+          <Calendar className="stat-icon" size={16} />
+          <div className="stat-label">INTERVIEWS SCHEDULED</div>
+          <div className="stat-value">{stats.interviews}</div>
+          <div className="stat-desc">In progress this cycle</div>
         </article>
-        <article className="stat-card stat-card-offers">
-          <p className="section-label">OFFERS RECEIVED</p>
-          <p className="stat-value">{stats.offers}</p>
-          <p className="muted">Positive outcomes</p>
+        <article className="stat-card fade-up" style={{ animationDelay: '0.15s' }}>
+          <Award className="stat-icon" size={16} />
+          <div className="stat-label">OFFERS RECEIVED</div>
+          <div className="stat-value">{stats.offers}</div>
+          <div className="stat-desc">Positive outcomes</div>
         </article>
-        <article className="stat-card stat-card-ats">
-          <p className="section-label">AVG ATS SCORE</p>
-          <p className="stat-value">{stats.ats}</p>
-          <p className="muted">Current health score</p>
-        </article>
-      </section>
-
-      <section className="row-two">
-        <article className="panel panel-wide">
-          <table>
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentApplications.map((app) => (
-                <tr key={app.id}>
-                  <td>{app.company}</td>
-                  <td>{app.role}</td>
-                  <td><span className={`status-badge status-${app.status}`}>{app.status}</span></td>
-                  <td>{app.applied_date ? new Date(app.applied_date).toLocaleDateString() : '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="view-all-wrap"><Link to="/applications">View all</Link></div>
-        </article>
-
-        <article className="panel panel-narrow">
-          {STATUS_ORDER.map((status) => {
-            const value = statusCounts[status]
-            const width = `${Math.round((value / maxCount) * 100)}%`
-            return (
-              <div className="status-row" key={status}>
-                <div className="status-head">
-                  <span>{status}</span>
-                  <strong>{value}</strong>
-                </div>
-                <div className="progress-track">
-                  <span className={STATUS_BAR_CLASS[status]} style={{ width }} />
-                </div>
-              </div>
-            )
-          })}
+        <article className="stat-card fade-up" style={{ animationDelay: '0.2s' }}>
+          <Activity className="stat-icon" size={16} />
+          <div className="stat-label">AVG ATS SCORE</div>
+          <div className="stat-value">{stats.ats}</div>
+          <div className="stat-desc">Current health score</div>
         </article>
       </section>
 
-      <section className="row-three">
-        <article className="panel">
-          <p className="section-label">SKILLS TO LEARN</p>
-          <div className="chips">
+      <section className="dashboard-grid fade-up" style={{ animationDelay: '0.25s' }}>
+        <article className="dash-card recent-apps-card">
+          <div className="dash-card-header">
+            <h3>Recent Applications</h3>
+            <Link to="/applications" className="view-all">View all <ArrowRight size={14} /></Link>
+          </div>
+          <div className="apps-table-container">
+            <table className="apps-table">
+              <tbody>
+                {recentApplications.map((app) => (
+                  <tr key={app.id}>
+                    <td>
+                      <div className="company-info">
+                        <div className="company-avatar">{app.company.charAt(0).toUpperCase()}</div>
+                        <div className="company-text">
+                          <div className="company-name">{app.company}</div>
+                          <div className="company-role">{app.role}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`status-pill status-${app.status}`}>{app.status}</span>
+                    </td>
+                    <td className="date-cell">
+                      {app.applied_date ? new Date(app.applied_date).toLocaleDateString() : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article className="dash-card pipeline-card">
+          <div className="dash-card-header">
+            <h3>Pipeline</h3>
+          </div>
+          <div className="pipeline-bars">
+            {STATUS_ORDER.map((status) => {
+              const value = statusCounts[status]
+              const width = `${Math.round((value / maxCount) * 100)}%`
+              return (
+                <div className="pipeline-row" key={status}>
+                  <div className="pipeline-label">
+                    <span>{status}</span>
+                    <strong>{value}</strong>
+                  </div>
+                  <div className="pipeline-track">
+                    <div className={`pipeline-fill fill-${status}`} style={{ width }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </article>
+      </section>
+
+      <section className="dashboard-grid bottom-grid fade-up" style={{ animationDelay: '0.3s' }}>
+        <article className="dash-card">
+          <div className="dash-card-header">
+            <h3>Skill Gaps</h3>
+          </div>
+          <div className="skills-gap-container">
             {skillsToLearn.length > 0 ? (
-              skillsToLearn.map((skill) => <span key={skill} className="skill-chip">{skill}</span>)
+              skillsToLearn.map((skill) => <span key={skill} className="skill-pill">{skill}</span>)
             ) : (
-              <p className="muted">No missing skills captured yet</p>
+              <p className="empty-text">No missing skills captured yet</p>
             )}
           </div>
         </article>
 
-        <article className="panel">
-          <p className="section-label">UPCOMING INTERVIEWS</p>
-          {upcomingInterviews.length > 0 ? (
-            <div className="interview-list">
-              {upcomingInterviews.map((item) => (
-                <div key={item.id} className="interview-item">
-                  <div className="date-box">
-                    <span>{new Date(item.interview_date).getDate()}</span>
-                    <small>{new Date(item.interview_date).toLocaleString('default', { month: 'short' })}</small>
+        <article className="dash-card">
+          <div className="dash-card-header">
+            <h3>Upcoming Interviews</h3>
+          </div>
+          <div className="upcoming-interviews-container">
+            {upcomingInterviews.length > 0 ? (
+              upcomingInterviews.map((item) => (
+                <div key={item.id} className="upcoming-item">
+                  <div className="upcoming-date-box">
+                    <span className="upcoming-day">{new Date(item.interview_date).getDate()}</span>
+                    <span className="upcoming-month">{new Date(item.interview_date).toLocaleString('default', { month: 'short' })}</span>
                   </div>
-                  <div>
-                    <p className="company">{item.company}</p>
-                    <p className="role">{item.role}</p>
-                    <p className="date">{new Date(item.interview_date).toLocaleDateString()}</p>
+                  <div className="upcoming-info">
+                    <p className="upcoming-company">{item.company}</p>
+                    <p className="upcoming-role">{item.role}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="muted">No interviews scheduled</p>
-          )}
+              ))
+            ) : (
+              <div className="empty-state">
+                <CheckCircle2 />
+                <p>No interviews scheduled right now.</p>
+              </div>
+            )}
+          </div>
         </article>
       </section>
     </div>

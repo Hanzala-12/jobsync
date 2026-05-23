@@ -11,6 +11,7 @@ class ORMBase(BaseModel):
 class UserCreate(BaseModel):
     email: str
     password: str
+    name: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -21,7 +22,9 @@ class UserLogin(BaseModel):
 class UserOut(ORMBase):
     id: int
     email: str
+    name: Optional[str] = None
     is_active: bool
+    token_version: int = 0
     created_at: datetime
 
 
@@ -30,6 +33,10 @@ class AuthToken(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class LogoutResponse(BaseModel):
+    success: bool = True
 
 
 class ResumeAnalysis(BaseModel):
@@ -381,6 +388,11 @@ class StudentProfileOut(ORMBase):
     degree_level: str
     academic_background: Optional[str] = None
     created_at: Optional[datetime] = None
+
+
+class StudentProfileListResponse(BaseModel):
+    selected_profile_id: Optional[int] = None
+    profiles: List[StudentProfileOut] = Field(default_factory=list)
 
 
 class UniversityRecommendationRequest(BaseModel):

@@ -1,0 +1,35 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "W",   # pycodestyle warnings
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "T20", # flake8-print
+    "Q",   # flake8-quotes
+    "SLF", # flake8-self
+    "RET", # flake8-return
+    "PTH", # flake8-use-pathlib
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "UP032", # f-string format (prefer .format for complex cases)
+]
+
+[lint.pydocstyle]
+convention = "google"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

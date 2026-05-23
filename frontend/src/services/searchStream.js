@@ -1,11 +1,11 @@
-// Simple singleton manager for job search SSE streams
+// Manages job-search requests and keeps the Jobs page loading state in sync.
 const state = {
-  es: null,
   jobs: [],
   streamingCount: 0,
   streamElapsed: 0,
   loading: false,
   url: null,
+  timer: null,
   subscribers: new Set(),
 }
 
@@ -18,84 +18,104 @@ function notify() {
     url: state.url,
   }
   for (const cb of state.subscribers) {
-    try { cb(snapshot) } catch (e) { /* ignore */ }
+    try {
+      cb(snapshot)
+    } catch (e) {
+      // ignore subscriber errors
+    }
   }
 }
 
-function start(url) {
-  if (state.es && state.url === url) return
-  if (state.es) {
-    try { state.es.close() } catch (e) {}
-    state.es = null
+function resetStreamState() {
+  if (state.timer) {
+    clearInterval(state.timer)
+    state.timer = null
   }
+  state.loading = false
+  state.url = null
+}
+
+async function start(url) {
+  if (state.url === url && state.loading) return
+
+  if (state.timer) {
+    clearInterval(state.timer)
+    state.timer = null
+  }
+
   state.jobs = []
   state.streamingCount = 0
   state.streamElapsed = 0
   state.loading = true
   state.url = url
 
+  state.timer = setInterval(() => {
+    if (!state.loading) return
+    state.streamElapsed += 1
+    notify()
+  }, 1000)
+
+  notify()
+
   try {
-    const es = new EventSource(url)
-    state.es = es
+    const fallbackUrl = url.replace('/search/stream', '/search')
+    const response = await fetch(fallbackUrl, {
+      headers: {
+        Accept: 'application/json',
+      },
+    })
 
-    es.onmessage = (evt) => {
-      try {
-        const data = JSON.parse(evt.data)
-        if (typeof data.combined_count === 'number') state.streamingCount = data.combined_count
-        if (typeof data.elapsed === 'number') state.streamElapsed = data.elapsed
-        if (data.partial && Array.isArray(data.partial)) {
-          for (const j of data.partial) {
-            state.jobs.push(j)
-          }
-        }
-        if (data.done) {
-          if (Array.isArray(data.results)) {
-            state.jobs = [...data.results]
-            state.streamingCount = data.results.length
-          }
-          state.loading = false
-          try { es.close() } catch (e) {}
-          state.es = null
-        }
-        notify()
-      } catch (e) {
-        console.error('SearchStream parse error', e)
-      }
+    if (!response.ok) {
+      throw new Error(`SearchStream HTTP ${response.status}`)
     }
 
-    es.onerror = (err) => {
-      console.error('SearchStream error', err)
-      state.loading = false
-      try { es.close() } catch (e) {}
-      state.es = null
-      notify()
+    const jobs = await response.json()
+    if (!Array.isArray(jobs)) {
+      throw new Error('SearchStream payload was not an array')
     }
-  } catch (e) {
-    console.error('SearchStream start failed', e)
+
+    state.jobs = jobs
+    state.streamingCount = jobs.length
     state.loading = false
+    if (state.timer) {
+      clearInterval(state.timer)
+      state.timer = null
+    }
+    notify()
+  } catch (error) {
+    console.error('SearchStream error', error)
+    state.loading = false
+    if (state.timer) {
+      clearInterval(state.timer)
+      state.timer = null
+    }
     notify()
   }
 }
 
 function subscribe(cb) {
   state.subscribers.add(cb)
-  // send initial snapshot
-  try { cb({ jobs: [...state.jobs], streamingCount: state.streamingCount, streamElapsed: state.streamElapsed, loading: state.loading, url: state.url }) } catch (e) {}
-  return () => { state.subscribers.delete(cb) }
+  try {
+    cb({ jobs: [...state.jobs], streamingCount: state.streamingCount, streamElapsed: state.streamElapsed, loading: state.loading, url: state.url })
+  } catch (e) {}
+  return () => {
+    state.subscribers.delete(cb)
+  }
 }
 
 function stop() {
-  if (state.es) {
-    try { state.es.close() } catch (e) {}
-    state.es = null
-  }
-  state.loading = false
-  state.url = null
+  resetStreamState()
   notify()
 }
 
 function getState() {
-  return { jobs: [...state.jobs], streamingCount: state.streamingCount, streamElapsed: state.streamElapsed, loading: state.loading, url: state.url }
+  return {
+    jobs: [...state.jobs],
+    streamingCount: state.streamingCount,
+    streamElapsed: state.streamElapsed,
+    loading: state.loading,
+    url: state.url,
+  }
 }
 
 export default { start, subscribe, stop, getState }

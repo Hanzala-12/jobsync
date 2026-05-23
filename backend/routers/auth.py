@@ -9,7 +9,10 @@ from backend.schemas import AuthToken, UserCreate, UserLogin, UserOut
 from backend.security import (
     create_access_token,
     create_refresh_token,
+    create_access_token_for_user,
+    create_refresh_token_for_user,
     get_current_user,
+    get_user_by_id,
     get_user_by_email,
     hash_password,
     verify_password,
@@ -22,8 +25,8 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 def _token_response(user: User) -> AuthToken:
     return AuthToken(
-        access_token=create_access_token(user.email),
-        refresh_token=create_refresh_token(user.email),
+        access_token=create_access_token_for_user(user),
+        refresh_token=create_refresh_token_for_user(user),
         user=UserOut.model_validate(user),
     )
 
@@ -40,7 +43,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
 
-    user = User(email=email, hashed_password=hash_password(payload.password), is_active=True)
+    user = User(email=email, hashed_password=hash_password(payload.password), name=payload.name, is_active=True, token_version=0)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -68,13 +71,26 @@ def refresh(payload: dict, db: Session = Depends(get_db)):
     if decoded.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
 
-    email = str(decoded.get("sub") or "").strip().lower()
-    user = get_user_by_email(db, email)
+    try:
+        user_id = int(str(decoded.get("sub") or "").strip())
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+
+    user = get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if int(decoded.get("ver", 0) or 0) != int(getattr(user, "token_version", 0) or 0):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
     return _token_response(user)
 
 
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/logout")
+def logout(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.token_version = int(getattr(current_user, "token_version", 0) or 0) + 1
+    db.commit()
+    return {"success": True}

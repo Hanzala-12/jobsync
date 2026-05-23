@@ -22,7 +22,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, nullable=False, unique=True, index=True)
     hashed_password = Column(String, nullable=False)
+    name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    token_version = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
@@ -30,18 +32,23 @@ class UserProfile(Base):
     __tablename__ = "user_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     resume_text = Column(Text, nullable=True)
     skills = Column(Text, nullable=True)
     latest_ats_score = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+    user = relationship("User")
 
 
 class UserPreference(Base):
     __tablename__ = "user_preferences"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)
     selected_profile_id = Column(Integer, nullable=True)
+    selected_student_profile_id = Column(Integer, nullable=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    user = relationship("User")
 
 
 class Job(Base):
@@ -65,8 +72,8 @@ class Job(Base):
     scraped_at = Column(DateTime, nullable=True)
     dedup_fingerprint = Column(String, index=True, nullable=True)
     sources_seen = Column(Text, nullable=True)
-    first_seen_at = Column(DateTime, default=datetime.utcnow)
-    last_seen_at = Column(DateTime, default=datetime.utcnow)
+    first_seen_at = Column(DateTime, server_default=func.now())
+    last_seen_at = Column(DateTime, server_default=func.now())
     possibly_inactive = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     fetched_at = Column(DateTime, server_default=func.now())
@@ -76,6 +83,7 @@ class Application(Base):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     job_id = Column(Integer, nullable=True)
     company = Column(String)
     role = Column(String)
@@ -88,6 +96,7 @@ class Application(Base):
     notes = Column(Text, nullable=True)
     resume_version = Column(String, nullable=True)
     contact_email = Column(String, nullable=True)
+    user = relationship("User")
 
 
 class TimestampMixin:
@@ -99,12 +108,14 @@ class ResumeVersion(Base):
     __tablename__ = "resume_versions"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String)
     job_type = Column(String)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     used_for = Column(String, nullable=True)
     ats_score = Column(Integer, nullable=True)
+    user = relationship("User")
 
 
 class PrefetchedJob(Base):
@@ -175,6 +186,7 @@ class StudentProfile(Base):
     __tablename__ = "student_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     gpa = Column(Float, nullable=False)
     gre_score = Column(Integer, nullable=True)
     toefl_score = Column(Integer, nullable=True)
@@ -186,6 +198,7 @@ class StudentProfile(Base):
     academic_background = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     profile_skills = Column(JSON, nullable=False, default=list)
+    user = relationship("User")
 
 
 
@@ -196,6 +209,7 @@ class UniversityMatchCache(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     student_profile_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
     intended_major = Column(String, nullable=False, index=True)
@@ -207,6 +221,7 @@ class UniversityMatchCache(Base):
 
     student_profile = relationship("StudentProfile")
     program = relationship("Program")
+    user = relationship("User")
 
 
 class Scholarship(Base):
@@ -230,6 +245,7 @@ class StudentProgramMatch(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
     match_score = Column(Integer, nullable=False)
@@ -240,37 +256,42 @@ class StudentProgramMatch(Base):
     strengths = Column(JSON, nullable=False, default=list)
     recommendations = Column(JSON, nullable=False, default=list)
     summary = Column(String(500), nullable=False)
-    computed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    computed_at = Column(DateTime, server_default=func.now(), nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
 
     student = relationship("StudentProfile")
     program = relationship("Program")
+    user = relationship("User")
 
 
 class SavedProgram(Base):
     __tablename__ = "saved_programs"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
-    saved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    saved_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     student = relationship("StudentProfile")
     program = relationship("Program")
+    user = relationship("User")
 
 
 class StudyApplication(Base):
     __tablename__ = "applications_study"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
     status = Column(String, nullable=False, default="saved", index=True)
     notes = Column(Text, nullable=True)
     applied_at = Column(DateTime, nullable=True)
     deadline = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     student = relationship("StudentProfile")
     program = relationship("Program")
+    user = relationship("User")

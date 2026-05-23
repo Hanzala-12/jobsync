@@ -8,5 +8,5 @@
     "default_popup": "popup.html",
     "default_icon": "icon.png"
   },
-  "host_permissions": ["http://localhost:8000/*"]
+  "host_permissions": ["http://localhost:8000/*", "https://*.vercel.app/*"]
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Button from '../components/Button'
 import { profileAPI, resumeAPI } from '../api/client'
+import { UploadCloud, FileText, Download, Copy, Trash2, CheckCircle2, AlertCircle } from 'lucide-react'
 import './Resume.css'
 
 const TABS = ['analyze', 'rewrite', 'versions']
@@ -39,7 +40,6 @@ function Resume() {
 
   useEffect(() => {
     if (resumeText.trim()) return
-
     const cached = (localStorage.getItem('jobsync_resume_text') || '').trim()
     if (cached) {
       setResumeText(cached)
@@ -65,8 +65,13 @@ function Resume() {
   }, [resumeText])
 
   const loadVersions = async () => {
-    const response = await resumeAPI.listVersions()
-    setVersions(response.data || [])
+    try {
+      const response = await resumeAPI.listVersions()
+      const d = response.data
+      setVersions(Array.isArray(d) ? d : (d?.versions || d?.data || []))
+    } catch {
+      setVersions([])
+    }
   }
 
   useEffect(() => {
@@ -146,177 +151,207 @@ function Resume() {
     URL.revokeObjectURL(url)
   }
 
+  const scoreClass = score < 50 ? 'bad' : score < 76 ? 'ok' : 'good'
+
   return (
-    <div className="resume-page">
+    <div className="resume-page fade-up">
       <div className="page-header">
-        <h1>Resume</h1>
+        <h1>Resume Builder</h1>
         <p className="subtitle">Analyze, rewrite, and manage tailored resume versions.</p>
       </div>
 
-      <div className="tab-bar">
-        <button className={tab === 'analyze' ? 'active' : ''} onClick={() => setTab('analyze')}>Analyze</button>
-        <button className={tab === 'rewrite' ? 'active' : ''} onClick={() => setTab('rewrite')}>Rewrite</button>
-        <button className={tab === 'versions' ? 'active' : ''} onClick={() => setTab('versions')}>My Versions</button>
+      <div className="resume-tabs">
+        <button className={`resume-tab ${tab === 'analyze' ? 'active' : ''}`} onClick={() => setTab('analyze')}>Analyze Fit</button>
+        <button className={`resume-tab ${tab === 'rewrite' ? 'active' : ''}`} onClick={() => setTab('rewrite')}>AI Rewrite</button>
+        <button className={`resume-tab ${tab === 'versions' ? 'active' : ''}`} onClick={() => setTab('versions')}>My Versions</button>
       </div>
 
       {tab === 'analyze' && (
-        <div className="analyze-grid">
-          <section className="card-box">
-            <label className="upload-box">
+        <div className="analyze-grid fade-up">
+          <section className="panel-card">
+            <span className="field-label">RESUME PDF</span>
+            <label className="upload-zone">
+              <UploadCloud size={24} color="var(--j-text-3)" />
+              <p>{file ? file.name : 'Drop resume PDF here or click to browse'}</p>
               <input type="file" accept="application/pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-              <p>Drop resume or click to upload</p>
             </label>
+            
+            <span className="field-label">TARGET JOB DESCRIPTION</span>
             <textarea
+              className="text-area"
               value={jobDescription}
               onChange={(event) => setJobDescription(event.target.value)}
-              placeholder="Paste job description"
-              rows={10}
+              placeholder="Paste the job description you want to evaluate against..."
+              rows={8}
             />
-            <Button className="full" onClick={analyzeResume} loading={analyzing}>Analyze</Button>
+            <Button className="w-full" onClick={analyzeResume} loading={analyzing} disabled={!file}>Generate Analysis</Button>
           </section>
 
-          <section className="card-box">
+          <section className="panel-card">
             {!analysis ? (
-              <div className="empty-state">Upload a resume to see ATS analysis.</div>
+              <div className="empty-results">
+                <AlertCircle size={32} />
+                <p>Upload a resume and job description to see your ATS match score and skill gaps.</p>
+              </div>
             ) : (
-              <>
-                <p className="section-label">ATS MATCH SCORE</p>
-                <p className="ats-score">{score}</p>
-                <div className="score-bar"><span className={score < 50 ? 'score-red' : score < 76 ? 'score-amber' : 'score-green'} style={{ width: `${Math.min(score, 100)}%` }} /></div>
+              <div className="fade-up">
+                <div className="score-display">
+                  <div className={`score-circle ${scoreClass}`}>{score}</div>
+                  <div className="score-text">
+                    <span className="field-label">ATS MATCH SCORE</span>
+                    <p>Your resume scores <strong>{score}%</strong> against this job description.</p>
+                  </div>
+                </div>
 
-                <div className="skills-grid">
+                <div className="skills-split">
                   <div>
-                    <p className="section-label">MATCHED SKILLS</p>
-                    <div className="chip-grid">
-                      {(analysis.matched_skills || []).map((item) => <span key={item} className="chip good">{item}</span>)}
+                    <span className="field-label">MATCHED SKILLS</span>
+                    <div className="chip-container">
+                      {(analysis.matched_skills || []).map((item) => (
+                        <span key={item} className="skill-chip match">{item}</span>
+                      ))}
                     </div>
                   </div>
                   <div>
-                    <p className="section-label">MISSING SKILLS</p>
-                    <div className="chip-grid">
-                      {(analysis.missing_keywords || []).map((item) => <span key={item} className="chip bad">{item}</span>)}
+                    <span className="field-label">MISSING SKILLS</span>
+                    <div className="chip-container">
+                      {(analysis.missing_keywords || []).map((item) => (
+                        <span key={item} className="skill-chip missing">{item}</span>
+                      ))}
                     </div>
                   </div>
                 </div>
 
-                <p className="section-label">SUGGESTIONS</p>
-                <ol className="tips-list">
+                <span className="field-label">ACTIONABLE FEEDBACK</span>
+                <ul className="tips-list">
                   {(analysis.tips || []).map((tip, index) => <li key={`${tip}-${index}`}>{tip}</li>)}
-                </ol>
-              </>
+                </ul>
+              </div>
             )}
           </section>
         </div>
       )}
 
       {tab === 'rewrite' && (
-        <div className="rewrite-grid">
-          <section className="card-box">
-            <p className="section-label">YOUR RESUME</p>
+        <div className="rewrite-grid fade-up">
+          <section className="panel-card">
+            <span className="field-label">YOUR RESUME TEXT</span>
             <textarea
-              rows={12}
+              className="text-area"
+              rows={10}
               value={resumeText}
               onChange={(event) => setResumeText(event.target.value)}
-              placeholder="Paste your resume text"
+              placeholder="Paste your current resume content..."
             />
-            <p className="section-label">JOB DESCRIPTION</p>
+            
+            <span className="field-label">TARGET JOB DESCRIPTION</span>
             <textarea
-              rows={10}
+              className="text-area"
+              rows={8}
               value={rewriteJobDescription}
               onChange={(event) => setRewriteJobDescription(event.target.value)}
-              placeholder="Paste target job description"
+              placeholder="Paste the target job description to optimize for..."
             />
-            <p className="section-label">JOB TYPE</p>
-            <div className="type-row">
+            
+            <span className="field-label">OPTIMIZE FOR ROLE TYPE</span>
+            <div className="job-types-row">
               {JOB_TYPES.map((type) => (
-                <button key={type} className={jobType === type ? 'type active' : 'type'} onClick={() => setJobType(type)}>
+                <button key={type} className={`type-btn ${jobType === type ? 'active' : ''}`} onClick={() => setJobType(type)}>
                   {type}
                 </button>
               ))}
             </div>
-            <Button className="full" onClick={rewriteResume} loading={rewriting}>Rewrite My Resume</Button>
+            
+            <Button className="w-full" onClick={rewriteResume} loading={rewriting}>Rewrite Resume</Button>
           </section>
 
-          <section className="card-box">
+          <section className="panel-card">
             {!rewriteResult ? (
-              <div className="empty-state">{rewriteError || 'AI rewrite output will appear here.'}</div>
+              <div className="empty-results">
+                <FileText size={32} />
+                <p>{rewriteError || 'Tailored resume output will appear here after optimization.'}</p>
+              </div>
             ) : (
-              <>
-                <p className="stats-text">
-                  <span className="kpi-good">{rewriteResult.keywords_added?.length || 0} keywords added</span>
-                  <span>{rewriteResult.keywords_removed?.length || 0} removed</span>
-                  <span className="kpi-accent">{rewriteResult.changes_made?.length || 0} changes</span>
-                </p>
-                <div className="text-panels">
-                  <div>
-                    <p className="section-label">ORIGINAL</p>
-                    <pre>{resumeText}</pre>
+              <div className="fade-up">
+                <div className="stats-row">
+                  <span className="stat-add">+{rewriteResult.keywords_added?.length || 0} keywords</span>
+                  <span className="stat-del">-{rewriteResult.keywords_removed?.length || 0} removed</span>
+                  <span className="stat-mod">~{rewriteResult.changes_made?.length || 0} modifications</span>
+                </div>
+                
+                <div className="diff-panels">
+                  <div className="diff-col">
+                    <h4>ORIGINAL</h4>
+                    <div className="diff-content">{resumeText}</div>
                   </div>
-                  <div>
-                    <p className="section-label">REWRITTEN</p>
-                    <pre className="rewritten">{rewriteResult.rewritten}</pre>
+                  <div className="diff-col">
+                    <h4>REWRITTEN (OPTIMIZED)</h4>
+                    <div className="diff-content new">{rewriteResult.rewritten}</div>
                   </div>
                 </div>
 
-                <p className="section-label">CHANGES MADE</p>
-                <ul className="plain-list">
+                <span className="field-label">KEY EXPERT ADJUSTMENTS</span>
+                <ul className="changes-list">
                   {(rewriteResult.changes_made || []).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
                 </ul>
 
-                <p className="section-label">KEYWORDS ADDED</p>
-                <div className="chip-grid">
-                  {(rewriteResult.keywords_added || []).map((item) => <span key={item} className="chip good">{item}</span>)}
+                <div className="action-row">
+                  <Button variant="secondary" onClick={() => copyText(rewriteResult.rewritten)}><Copy size={14} style={{ marginRight: 6 }}/> Copy text</Button>
+                  <Button variant="secondary" onClick={() => downloadText(rewriteResult.rewritten, 'optimized-resume.txt')}><Download size={14} style={{ marginRight: 6 }}/> Download .txt</Button>
+                  <Button onClick={() => setShowSaveModal(true)}>Save Version</Button>
                 </div>
-
-                <div className="button-row">
-                  <Button variant="secondary" onClick={() => copyText(rewriteResult.rewritten)}>Copy</Button>
-                  <Button variant="secondary" onClick={() => downloadText(rewriteResult.rewritten, 'rewritten-resume.txt')}>Download .txt</Button>
-                  <Button variant="secondary" onClick={() => setShowSaveModal(true)}>Save as Version</Button>
-                </div>
-              </>
+              </div>
             )}
           </section>
         </div>
       )}
 
       {tab === 'versions' && (
-        <section className="card-box">
-          <div className="versions-head">
-            <h3>SAVED VERSIONS ({versions.length})</h3>
-            <Button variant="secondary" size="small" onClick={() => setShowSaveModal(true)}>Save New Version</Button>
+        <section className="panel-card fade-up">
+          <div className="vc-header">
+            <h3>SAVED VERSIONS</h3>
           </div>
 
-          {versions.length === 0 && <p className="empty-state">No saved versions yet.</p>}
+          {versions.length === 0 && (
+             <div className="empty-results" style={{ minHeight: 200 }}>
+               <p>No tailored versions saved yet.</p>
+             </div>
+          )}
 
-          <div className="versions-list">
+          <div className="versions-grid">
             {versions.map((version) => (
               <article className="version-card" key={version.id}>
-                <div>
-                  <p className="name">{version.name}</p>
-                  <span className="job-type">{version.job_type}</span>
+                <div className="vc-header">
+                  <div>
+                    <div className="vc-title">{version.name}</div>
+                    <div className="vc-date">{new Date(version.created_at).toLocaleDateString()}</div>
+                  </div>
+                  <span className="vc-type">{version.job_type}</span>
                 </div>
-                <div>
-                  <p>{new Date(version.created_at).toLocaleDateString()}</p>
-                  <input
-                    defaultValue={version.used_for || ''}
-                    placeholder="Used for: Company"
-                    onBlur={(event) => resumeAPI.updateVersionUsedFor(version.id, event.target.value).then(loadVersions)}
-                  />
-                </div>
-                <div className="actions">
-                  <span className="ats">ATS {version.ats_score ?? '-'}</span>
-                  <Button size="small" variant="secondary" onClick={() => setResumeText(version.content)}>Load</Button>
-                  <Button size="small" variant="secondary" onClick={() => copyText(version.content)}>Copy</Button>
-                  <Button
-                    size="small"
-                    variant="secondary"
-                    onClick={async () => {
-                      await resumeAPI.deleteVersion(version.id)
-                      loadVersions()
-                    }}
-                  >
-                    Delete
-                  </Button>
+                
+                <input
+                  className="vc-input"
+                  defaultValue={version.used_for || ''}
+                  placeholder="Used for: e.g. Acme Corp Application"
+                  onBlur={(event) => resumeAPI.updateVersionUsedFor(version.id, event.target.value).then(loadVersions)}
+                />
+                
+                <div className="vc-actions">
+                  <span className="vc-ats">ATS Score: {version.ats_score ?? 'N/A'}</span>
+                  <div className="vc-btn-group">
+                    <button className="icon-action-btn" onClick={() => { setResumeText(version.content); setTab('rewrite'); }} title="Load into editor"><FileText size={14} /></button>
+                    <button className="icon-action-btn" onClick={() => copyText(version.content)} title="Copy text"><Copy size={14} /></button>
+                    <button
+                      className="icon-action-btn del"
+                      onClick={async () => {
+                        await resumeAPI.deleteVersion(version.id)
+                        loadVersions()
+                      }}
+                      title="Delete version"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}
@@ -325,17 +360,18 @@ function Resume() {
       )}
 
       {showSaveModal && (
-        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Save Version</h3>
+        <div className="save-modal-overlay" onClick={() => setShowSaveModal(false)}>
+          <div className="save-modal fade-up" onClick={(event) => event.stopPropagation()}>
+            <h3>Save Tailored Version</h3>
             <input
               value={versionName}
               onChange={(event) => setVersionName(event.target.value)}
               placeholder={`${jobType} Version`}
+              autoFocus
             />
-            <div className="modal-actions">
-              <Button onClick={() => saveVersion(versionName)} loading={savingVersion}>Save</Button>
-              <Button variant="secondary" onClick={() => setShowSaveModal(false)}>Cancel</Button>
+            <div className="save-modal-actions">
+              <Button className="w-full" onClick={() => saveVersion(versionName)} loading={savingVersion}>Save</Button>
+              <Button className="w-full" variant="secondary" onClick={() => setShowSaveModal(false)}>Cancel</Button>
             </div>
           </div>
         </div>

@@ -31,34 +31,28 @@ function Signup({ onSignup }) {
   return (
     <div className="auth-shell">
       <aside className="auth-hero">
-        <div className="auth-brand" style={{ marginBottom: 0 }}>
-          <div className="auth-mark" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <span style={{ color: '#fff' }}>JobSync</span>
-        </div>
-        <div>
-          <p className="auth-hero-title">Build a cleaner job hunt from day one.</p>
-          <p className="auth-hero-copy">Create a workspace for applications, resumes, cover letters, and interview prep.</p>
-        </div>
-        <p className="auth-hero-footer">© 2026 JobSync</p>
-      </aside>
-
-      <section className="auth-panel">
-        <div className="auth-card">
-          <div className="auth-brand">
-            <div className="auth-mark" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <div className="hero-content fade-up">
+          <div className="hero-logo-lockup">
+            <div className="hero-mark">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
             </div>
-            <span>JobSync</span>
+            <span className="hero-brand">JobSync</span>
           </div>
+          <h1 className="hero-title">Sync yourself with your dream job</h1>
+          <ul className="hero-features">
+            <li><span>🎯</span> Smart job matching</li>
+            <li><span>📊</span> Application tracking</li>
+            <li><span>🎓</span> University portal</li>
+          </ul>
+        </div>
+      </aside>
 
+      <section className="auth-panel fade-up">
+        <div className="auth-card">
           <h1>Create your account</h1>
-          <p className="subtitle">Sign up to start managing your job search in one place.</p>
+          <p className="subtitle">Sign up to start managing your job search.</p>
 
           {error && <p className="auth-error">{error}</p>}
 
@@ -76,7 +70,7 @@ function Signup({ onSignup }) {
               <input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a password" />
             </div>
             <div className="auth-actions">
-              <Button type="submit" className="w-full" loading={loading}>Sign up</Button>
+              <Button type="submit" loading={loading} className="auth-submit">Sign up</Button>
               <p className="auth-link">Already have an account? <Link to="/login">Log in</Link></p>
             </div>
           </form>

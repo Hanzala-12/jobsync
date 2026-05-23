@@ -31,10 +31,16 @@ function MyApplications({ profileId }) {
         studentAPI.getApplications(profileId),
         studentAPI.getSavedUniversities(profileId),
       ])
-      setApplications(applicationsRes.data || [])
-      setSavedPrograms(savedRes.data || [])
+      const appData = applicationsRes.data
+      const appArray = Array.isArray(appData) ? appData : (appData?.applications || appData?.data || [])
+      setApplications(appArray)
+      
+      const savedData = savedRes.data
+      const savedArray = Array.isArray(savedData) ? savedData : (savedData?.saved || savedData?.data || [])
+      setSavedPrograms(savedArray)
+      
       const draft = {}
-      ;(applicationsRes.data || []).forEach((item) => {
+      appArray.forEach((item) => {
         draft[item.id] = item.notes || ''
       })
       setNotesDraft(draft)

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ResumeVersion, UserPreference, UserProfile
+from backend.security import get_current_user
 from backend.schemas import (
     ResumeAnalysis,
     ResumeReanalysisRequest,
@@ -232,10 +233,10 @@ def _unwrap_nested_rewrite_payload(rewritten: str) -> tuple[str, dict]:
     return rewritten, {}
 
 
-def _load_fallback_profile_text(db: Session) -> str:
+def _load_fallback_profile_text(db: Session, user_id: int) -> str:
     selected_id = None
     try:
-        pref = db.query(UserPreference).order_by(UserPreference.updated_at.desc(), UserPreference.id.desc()).first()
+        pref = db.query(UserPreference).filter(UserPreference.user_id == user_id).order_by(UserPreference.updated_at.desc(), UserPreference.id.desc()).first()
         if pref and pref.selected_profile_id:
             selected_id = int(pref.selected_profile_id)
     except Exception:
@@ -243,14 +244,14 @@ def _load_fallback_profile_text(db: Session) -> str:
 
     profile = None
     if selected_id:
-        profile = db.query(UserProfile).filter(UserProfile.id == selected_id).first()
+        profile = db.query(UserProfile).filter(UserProfile.id == selected_id, UserProfile.user_id == user_id).first()
     if not profile:
-        profile = db.query(UserProfile).order_by(UserProfile.created_at.desc()).first()
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).order_by(UserProfile.created_at.desc()).first()
     return (profile.resume_text or "").strip() if profile else ""
 
 
 @router.post("/analyze", response_model=ResumeAnalysis)
-async def analyze_resume(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def analyze_resume(file: UploadFile = File(...), current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         content = await file.read()
         tmp.write(content)
@@ -277,9 +278,9 @@ Respond in JSON format: {{"score": number, "matched_skills": ["..."], "keywords"
     keywords = parsed.get("keywords", []) or []
     tips = parsed.get("tips", []) or []
 
-    profile = db.query(UserProfile).first()
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     if not profile:
-        profile = UserProfile()
+        profile = UserProfile(user_id=current_user.id)
         db.add(profile)
 
     profile.resume_text = text
@@ -297,8 +298,8 @@ Respond in JSON format: {{"score": number, "matched_skills": ["..."], "keywords"
 
 
 @router.post("/reanalyze", response_model=ResumeAnalysis)
-def reanalyze_resume(req: ResumeReanalysisRequest, db: Session = Depends(get_db)):
-    profile = db.query(UserProfile).first()
+def reanalyze_resume(req: ResumeReanalysisRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     if not profile or not profile.resume_text:
         raise HTTPException(status_code=400, detail="Upload a resume first")
 
@@ -348,12 +349,12 @@ Return exactly this JSON schema:
 
 
 @router.post("/rewrite", response_model=ResumeRewriteResponse)
-def rewrite_resume(req: ResumeRewriteRequest, db: Session = Depends(get_db)):
+def rewrite_resume(req: ResumeRewriteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     llm = LLMProvider()
 
     source_resume_text = (req.resume_text or "").strip()
     if not source_resume_text:
-        source_resume_text = _load_fallback_profile_text(db)
+        source_resume_text = _load_fallback_profile_text(db, current_user.id)
     if not source_resume_text:
         raise HTTPException(status_code=400, detail="No resume text found. Paste resume text or upload/select a profile first.")
 
@@ -421,8 +422,9 @@ Return JSON only:
 
 
 @router.post("/versions", response_model=ResumeVersionOut)
-def create_resume_version(payload: ResumeVersionCreate, db: Session = Depends(get_db)):
+def create_resume_version(payload: ResumeVersionCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     version = ResumeVersion(
+        user_id=current_user.id,
         name=payload.name,
         job_type=payload.job_type,
         content=payload.content,
@@ -436,21 +438,21 @@ def create_resume_version(payload: ResumeVersionCreate, db: Session = Depends(ge
 
 
 @router.get("/versions", response_model=list[ResumeVersionOut])
-def list_resume_versions(db: Session = Depends(get_db)):
-    return db.query(ResumeVersion).order_by(ResumeVersion.created_at.desc()).all()
+def list_resume_versions(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(ResumeVersion).filter(ResumeVersion.user_id == current_user.id).order_by(ResumeVersion.created_at.desc()).all()
 
 
 @router.get("/versions/{version_id}", response_model=ResumeVersionOut)
-def get_resume_version(version_id: int, db: Session = Depends(get_db)):
-    version = db.query(ResumeVersion).filter(ResumeVersion.id == version_id).first()
+def get_resume_version(version_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    version = db.query(ResumeVersion).filter(ResumeVersion.id == version_id, ResumeVersion.user_id == current_user.id).first()
     if not version:
         raise HTTPException(status_code=404, detail="Resume version not found")
     return version
 
 
 @router.delete("/versions/{version_id}")
-def delete_resume_version(version_id: int, db: Session = Depends(get_db)):
-    version = db.query(ResumeVersion).filter(ResumeVersion.id == version_id).first()
+def delete_resume_version(version_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    version = db.query(ResumeVersion).filter(ResumeVersion.id == version_id, ResumeVersion.user_id == current_user.id).first()
     if not version:
         raise HTTPException(status_code=404, detail="Resume version not found")
     db.delete(version)
@@ -462,9 +464,10 @@ def delete_resume_version(version_id: int, db: Session = Depends(get_db)):
 def update_resume_version_used_for(
     version_id: int,
     payload: ResumeVersionUpdateUsedFor,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    version = db.query(ResumeVersion).filter(ResumeVersion.id == version_id).first()
+    version = db.query(ResumeVersion).filter(ResumeVersion.id == version_id, ResumeVersion.user_id == current_user.id).first()
     if not version:
         raise HTTPException(status_code=404, detail="Resume version not found")
 

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any, Dict
 
 import requests
 
 BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api").rstrip("/")
+AUTH_BASE_URL = os.getenv("AUTH_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
 def _pretty(title: str, payload: Any) -> None:
@@ -16,6 +18,22 @@ def _pretty(title: str, payload: Any) -> None:
 
 def main() -> None:
     session = requests.Session()
+
+    auth_email = f"smoke_student_{int(time.time())}@example.com"
+    auth_response = session.post(
+        f"{AUTH_BASE_URL}/auth/signup",
+        json={"email": auth_email, "password": "TestPass123!"},
+        timeout=60,
+    )
+    if auth_response.status_code == 409:
+        auth_response = session.post(
+            f"{AUTH_BASE_URL}/auth/login",
+            json={"email": auth_email, "password": "TestPass123!"},
+            timeout=60,
+        )
+    auth_response.raise_for_status()
+    auth_payload = auth_response.json()
+    session.headers.update({"Authorization": f"Bearer {auth_payload['access_token']}"})
 
     profile_payload: Dict[str, Any] = {
         "gpa": 3.7,

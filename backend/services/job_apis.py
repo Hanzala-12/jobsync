@@ -16,7 +16,7 @@ import logging
 _search_cache: Dict[str, tuple] = {}
 _logger = logging.getLogger(__name__)
 _SEARCH_CACHE_TTL = 30
-_SOURCE_TIMEOUT_SECONDS = max(4, int(os.getenv("SOURCE_TIMEOUT_SECONDS", "8")))
+_SOURCE_TIMEOUT_SECONDS = max(4, int(os.getenv("SOURCE_TIMEOUT_SECONDS", "12")))
 
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/{country}/search/1"
 REMOTIVE_URL = "https://remotive.com/api/remote-jobs"
