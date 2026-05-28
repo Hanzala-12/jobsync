@@ -1,29 +1,36 @@
 import logging
 import os
 import json
-import time
-from collections import defaultdict, deque
-from typing import Deque, Dict
+from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import inspect
 
+try:
+    from redis.asyncio import from_url as redis_from_url
+except Exception:  # pragma: no cover - optional dependency in lightweight test envs
+    redis_from_url = None
+
 from backend.database import engine, Base
-from backend.routers import resume, jobs, applications, cover_letter, intelligence, student, auth
+from backend.routers import resume, jobs, applications, cover_letter, intelligence, auth
+from backend.routers import tasks as tasks_router
 from backend.routers import kanban, voice_interview, browser_extension, followup
 import importlib
 profile = importlib.import_module('backend.routers.profile')
 from core.scheduler import start_scheduler_if_enabled
 from alembic.config import Config
 from alembic import command
+from backend.celery_app import configure_celery
 from backend.middleware.logging import RequestLoggingMiddleware, configure_logging, standard_error_response
 from backend.middleware.security import HTTPSRedirectMiddleware
+from backend.middleware.ab_testing import ABTestingAssignmentMiddleware
 from backend.routers.jobs import shutdown_background_executor
+from backend.monitoring import ENABLE_METRICS, metrics_payload, record_http_request
+from backend.security import decode_token
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -34,48 +41,88 @@ REQUIRED_TABLES = [
     "resume_versions",
     "prefetched_jobs",
     "user_profiles",
+    "user_educations",
+    "user_work_experiences",
+    "user_certifications",
+    "user_projects",
+    "user_languages",
     "user_preferences",
-    "universities",
-    "programs",
-    "student_profiles",
-    "scholarships",
-    "saved_programs",
-    "applications_study",
-    "student_program_matches",
-    "university_match_cache",
+    
+    "ab_tests",
+    "ab_test_assignments",
+    "ab_test_events",
 ]
 
-REQUIRED_UNIVERSITY_COLUMNS = ["created_at", "updated_at", "last_scraped_at"]
+RUN_STARTUP_MIGRATIONS = os.getenv("RUN_STARTUP_MIGRATIONS", "false").lower() == "true"
+REDIS_URL = (os.getenv("REDIS_URL") or os.getenv("CELERY_BROKER_URL") or "redis://localhost:6379/0").strip()
+RATE_LIMIT_REQUESTS = max(1, int(os.getenv("RATE_LIMIT_REQUESTS", "100")))
+RATE_LIMIT_PERIOD = max(1, int(os.getenv("RATE_LIMIT_PERIOD", "60")))
 
 
-class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, limit: int, period: int):
-        super().__init__(app)
-        self.limit = max(1, limit)
-        self.period = max(1, period)
-        self._requests: Dict[str, Deque[float]] = defaultdict(deque)
+class RedisRateLimitMiddleware:
+    def __init__(self, app):
+        self.app = app
 
-    async def dispatch(self, request: Request, call_next):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive=receive)
+        redis_client = getattr(request.app.state, "redis_client", None)
+        if redis_client is None:
+            await self.app(scope, receive, send)
+            return
+
         path = request.url.path
-        if path.startswith(("/docs", "/redoc", "/openapi")):
-            return await call_next(request)
+        if path.startswith(("/docs", "/redoc", "/openapi", "/metrics")):
+            await self.app(scope, receive, send)
+            return
+
+        key = self._limit_key(request)
+        try:
+            current = await redis_client.incr(key)
+            if current == 1:
+                await redis_client.expire(key, RATE_LIMIT_PERIOD)
+            if current > RATE_LIMIT_REQUESTS:
+                response = standard_error_response(429, "Rate limit exceeded")
+                await response(scope, receive, send)
+                return
+        except Exception:
+            logger.warning("Redis rate limiting unavailable; allowing request through", exc_info=True)
+
+        await self.app(scope, receive, send)
+
+    def _limit_key(self, request: Request) -> str:
+        token = ""
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+        if not token:
+            token = (request.query_params.get("token") or "").strip()
+
+        if token:
+            try:
+                payload = decode_token(token)
+                if payload.get("type") == "access":
+                    subject = str(payload.get("sub") or "")
+                    token_version = str(payload.get("ver", 0) or 0)
+                    if subject:
+                        return f"rl:user:{subject}:{token_version}:{request.url.path}"
+            except Exception:
+                pass
 
         client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
-        now = time.time()
-        bucket = self._requests[client_ip]
-        cutoff = now - self.period
-        while bucket and bucket[0] < cutoff:
-            bucket.popleft()
-        if len(bucket) >= self.limit:
-            return standard_error_response(429, "Rate limit exceeded")
-        bucket.append(now)
-        return await call_next(request)
+        client_ip = client_ip.split(",")[0].strip()
+        return f"rl:ip:{client_ip}:{request.url.path}"
 
 
 def _parse_cors_origins() -> list[str]:
     raw = os.getenv("CORS_ORIGINS", "").strip()
     if not raw:
-        return ["*"]
+        logger.warning("CORS_ORIGINS not set; defaulting to no external origins. Set CORS_ORIGINS explicitly in production.")
+        # Return empty list to disallow cross-origin requests by default (safe default)
+        return []
     if raw.startswith("["):
         try:
             parsed = json.loads(raw)
@@ -96,33 +143,31 @@ def _warn_if_university_columns_missing() -> None:
     inspector = inspect(engine)
     if not inspector.has_table("universities"):
         return
-
-    existing_columns = {column["name"] for column in inspector.get_columns("universities")}
-    missing_columns = [column_name for column_name in REQUIRED_UNIVERSITY_COLUMNS if column_name not in existing_columns]
-    if missing_columns:
-        logger.warning(
-            "universities table is missing expected columns: %s",
-            ", ".join(missing_columns),
-        )
+    # University table removed from schema; no-op
+    return
 
 
 def _run_startup_migrations() -> None:
+    if not RUN_STARTUP_MIGRATIONS:
+        logger.info("Startup migrations are disabled by RUN_STARTUP_MIGRATIONS=false")
+        return
+
     alembic_ini_path = os.path.join(os.path.dirname(__file__), "alembic.ini")
     if not os.path.exists(alembic_ini_path):
         alembic_ini_path = "backend/alembic.ini"
     alembic_cfg = Config(alembic_ini_path)
+    # Run alembic upgrade. In some local/dev trees there may be multiple
+    # migration heads (intentional during active development). Treat
+    # MultipleHeads as non-fatal in dev: log and skip automatic upgrade so
+    # the developer can resolve migrations manually.
     try:
         command.upgrade(alembic_cfg, "head")
-    except Exception:
-        logger.exception("Alembic upgrade failed; falling back to Base.metadata.create_all")
-        Base.metadata.create_all(bind=engine, checkfirst=True)
-    else:
-        try:
-            _verify_required_tables()
-        except Exception:
-            logger.warning("Required tables were still missing after Alembic; creating them from metadata")
-            Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception as exc:
+        # Avoid crashing the app on migration conflicts in local dev
+        logger.warning("Alembic upgrade skipped due to error: %s", exc)
+        return
 
+    # Verify required tables exist after migrations
     _verify_required_tables()
     _warn_if_university_columns_missing()
 
@@ -141,6 +186,8 @@ app = FastAPI(
     description="AI-powered job search assistant with advanced features"
 )
 
+configure_celery(app)
+
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Allow frontend calls
@@ -149,12 +196,7 @@ app.add_middleware(
     allow_origins=_parse_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
-)
-
-app.add_middleware(
-    SimpleRateLimitMiddleware,
-    limit=int(os.getenv("RATE_LIMIT_REQUESTS", "100")),
-    period=int(os.getenv("RATE_LIMIT_PERIOD", "60")),
+    allow_credentials=True,
 )
 
 app.add_middleware(
@@ -163,6 +205,35 @@ app.add_middleware(
 )
 
 app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(ABTestingAssignmentMiddleware)
+app.add_middleware(RedisRateLimitMiddleware)
+
+app.state.redis_client = None
+
+
+@app.on_event("startup")
+async def startup_redis_rate_limiter():
+    if redis_from_url is None:
+        logger.warning("Redis package is unavailable; distributed rate limiting is disabled")
+        return
+
+    try:
+        redis_client = redis_from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+        await redis_client.ping()
+        app.state.redis_client = redis_client
+        logger.info("Redis-backed rate limiting enabled")
+    except Exception:
+        logger.warning("Redis rate limiting is unavailable; proceeding without distributed throttling", exc_info=True)
+
+
+@app.get("/metrics")
+def metrics_endpoint():
+    if not ENABLE_METRICS:
+        raise HTTPException(status_code=404, detail="Metrics are disabled")
+    body, content_type = metrics_payload()
+    from fastapi.responses import Response
+
+    return Response(content=body, media_type=content_type)
 
 # Include original routers
 app.include_router(resume.router)
@@ -171,8 +242,8 @@ app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(cover_letter.router)
 app.include_router(intelligence.router)
-app.include_router(student.api_router)
 app.include_router(profile.router)
+app.include_router(tasks_router.api_router)
 
 # Include new upgrade routers
 app.include_router(kanban.router)

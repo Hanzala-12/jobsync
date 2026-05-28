@@ -32,9 +32,14 @@ alembic>=1.13.0
 tenacity>=8.2.0
 chromadb>=0.4.0
 sentence-transformers>=2.2.2
+rank_bm25>=0.2.2
 psycopg2-binary>=2.9.0
 supabase>=2.0.0
 email-validator>=2.0.0
+celery[redis]>=5.4.0
+redis>=5.0.0
+python-json-logger>=2.0.7
+prometheus-client>=0.20.0
 
 # Testing
 pytest>=8.0.0

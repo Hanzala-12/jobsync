@@ -65,14 +65,37 @@ def get_scout_status() -> dict:
     return dict(SCOUT_STATE)
 
 
-def run_daily_scout(role="software engineer", location="Pakistan", skills="", min_score=75, page=1) -> dict:
+def run_daily_scout(role="software engineer", location="Pakistan", skills="", min_score=75, page=1, user_id: int | None = None) -> dict:
     """Fetch jobs, score against resume, and save top matches."""
     db = next(get_db())
 
     try:
         _set_state(running=True, progress=5, message="Preparing scout", error=None, results=[])
 
+        # Load user's selected profile resume_text when user_id is provided
         resume_text = ""
+        try:
+            if user_id:
+                # Find selected profile id from user_preferences table
+                from backend.models import UserPreference, UserProfile
+
+                pref = db.query(UserPreference).filter(UserPreference.user_id == user_id).order_by(UserPreference.updated_at.desc(), UserPreference.id.desc()).first()
+                selected_id = pref.selected_profile_id if pref else None
+                profile = None
+                if selected_id:
+                    profile = db.query(UserProfile).filter(UserProfile.id == selected_id, UserProfile.user_id == user_id).first()
+                if not profile:
+                    # Fallback to most recent profile for the user
+                    profile = (
+                        db.query(UserProfile)
+                        .filter(UserProfile.user_id == user_id)
+                        .order_by(UserProfile.created_at.desc(), UserProfile.id.desc())
+                        .first()
+                    )
+                if profile and getattr(profile, "resume_text", None):
+                    resume_text = profile.resume_text or ""
+        except Exception:
+            resume_text = ""
 
         _set_state(progress=35, message="Searching live jobs")
         search_query = " ".join(part for part in [role, skills] if part and part.strip())
@@ -84,7 +107,7 @@ def run_daily_scout(role="software engineer", location="Pakistan", skills="", mi
             return {"error": "No jobs found. Try a different query."}
 
         _set_state(progress=55, message="Scoring jobs against resume")
-    matches = _score_jobs_fast(resume_text, jobs, role, skills, min_score)
+        matches = _score_jobs_fast(resume_text, jobs, role, skills, min_score)
 
         saved_ids = []
         duplicate_count = 0

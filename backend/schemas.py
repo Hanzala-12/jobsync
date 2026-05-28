@@ -64,6 +64,201 @@ class ResumeRewriteResponse(BaseModel):
     keywords_removed: List[str]
 
 
+class ResumeBuildResponse(BaseModel):
+    original_resume: str
+    simple_text_version: str
+    fixed_resume_text: str
+    sections: Dict[str, object] = Field(default_factory=dict)
+    keyword_debug: Dict[str, object] = Field(default_factory=dict)
+    ats_score: int = Field(ge=0, le=100)
+    changes_made: List[str]
+    html_resume: str
+    validation_passed: bool
+    validation_message: str
+    cached: bool = False
+
+
+class UserEducationBase(BaseModel):
+    degree: Optional[str] = None
+    institution: Optional[str] = None
+    field_of_study: Optional[str] = None
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    gpa: Optional[str] = None
+    description: Optional[str] = None
+
+
+class UserEducationCreate(UserEducationBase):
+    pass
+
+
+class UserEducationOut(ORMBase):
+    id: int
+    degree: Optional[str] = None
+    institution: Optional[str] = None
+    field_of_study: Optional[str] = None
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    gpa: Optional[str] = None
+    description: Optional[str] = None
+
+
+class UserWorkExperienceBase(BaseModel):
+    job_title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    responsibilities: List[str] = Field(default_factory=list)
+    achievements: List[str] = Field(default_factory=list)
+
+
+class UserWorkExperienceCreate(UserWorkExperienceBase):
+    pass
+
+
+class UserWorkExperienceOut(ORMBase):
+    id: int
+    job_title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    responsibilities: List[str] = Field(default_factory=list)
+    achievements: List[str] = Field(default_factory=list)
+
+
+class UserCertificationBase(BaseModel):
+    name: Optional[str] = None
+    issuing_org: Optional[str] = None
+    date_earned: Optional[str] = None
+    credential_url: Optional[str] = None
+
+
+class UserCertificationCreate(UserCertificationBase):
+    pass
+
+
+class UserCertificationOut(ORMBase):
+    id: int
+    name: Optional[str] = None
+    issuing_org: Optional[str] = None
+    date_earned: Optional[str] = None
+    credential_url: Optional[str] = None
+
+
+class UserProjectBase(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    technologies: List[str] = Field(default_factory=list)
+    project_url: Optional[str] = None
+
+
+class UserProjectCreate(UserProjectBase):
+    pass
+
+
+class UserProjectOut(ORMBase):
+    id: int
+    name: Optional[str] = None
+    description: Optional[str] = None
+    technologies: List[str] = Field(default_factory=list)
+    project_url: Optional[str] = None
+
+
+class UserLanguageBase(BaseModel):
+    name: Optional[str] = None
+    proficiency: Optional[str] = None
+
+
+class UserLanguageCreate(UserLanguageBase):
+    pass
+
+
+class UserLanguageOut(ORMBase):
+    id: int
+    name: Optional[str] = None
+    proficiency: Optional[str] = None
+
+
+class UserProfileBase(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    summary: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    achievements: List[str] = Field(default_factory=list)
+    preferred_job_titles: List[str] = Field(default_factory=list)
+    desired_salary_min: Optional[int] = None
+    desired_salary_max: Optional[int] = None
+    willing_to_relocate: bool = False
+    preferred_work_location: Optional[str] = None
+    resume_text: Optional[str] = None
+
+
+class UserProfileCreate(UserProfileBase):
+    education: List[UserEducationCreate] = Field(default_factory=list)
+    work_experience: List[UserWorkExperienceCreate] = Field(default_factory=list)
+    certifications: List[UserCertificationCreate] = Field(default_factory=list)
+    projects: List[UserProjectCreate] = Field(default_factory=list)
+    languages: List[UserLanguageCreate] = Field(default_factory=list)
+
+
+class UserProfileUpdate(UserProfileCreate):
+    pass
+
+
+class UserProfileOut(ORMBase):
+    id: int
+    user_id: int
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    summary: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    achievements: List[str] = Field(default_factory=list)
+    preferred_job_titles: List[str] = Field(default_factory=list)
+    desired_salary_min: Optional[int] = None
+    desired_salary_max: Optional[int] = None
+    willing_to_relocate: bool = False
+    preferred_work_location: Optional[str] = None
+    resume_text: Optional[str] = None
+    latest_ats_score: Optional[float] = None
+    created_at: datetime
+    education: List[UserEducationOut] = Field(default_factory=list)
+    work_experience: List[UserWorkExperienceOut] = Field(default_factory=list)
+    certifications: List[UserCertificationOut] = Field(default_factory=list)
+    projects: List[UserProjectOut] = Field(default_factory=list)
+    languages: List[UserLanguageOut] = Field(default_factory=list)
+    profile_completeness: Optional[int] = None
+
+
+class UserProfileSummary(ORMBase):
+    id: int
+    user_id: int
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    location: Optional[str] = None
+    summary: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    preferred_job_titles: List[str] = Field(default_factory=list)
+    latest_ats_score: Optional[float] = None
+    created_at: datetime
+    profile_completeness: Optional[int] = None
+
+
+class UserProfileListResponse(BaseModel):
+    profiles: List[UserProfileSummary] = Field(default_factory=list)
+    selected_profile_id: Optional[int] = None
+    selected_profile: Optional[UserProfileOut] = None
+
+
 class ResumeVersionCreate(BaseModel):
     name: str
     job_type: str
@@ -285,284 +480,3 @@ class InterviewQuestion(BaseModel):
 class InterviewPrepResponse(BaseModel):
     questions: List[InterviewQuestion]
 
-
-class UniversityBase(BaseModel):
-    name: str
-    country: str
-    city: str
-    website: Optional[str] = None
-    ranking: Optional[str] = None
-    ranking_global: Optional[int] = None
-    logo_url: Optional[str] = None
-    acceptance_rate: Optional[float] = None
-    accreditation: Optional[str] = None
-    student_population: Optional[int] = None
-
-
-class UniversityCreate(UniversityBase):
-    pass
-
-
-class UniversityOut(ORMBase):
-    id: int
-    name: str
-    country: str
-    city: str
-    website: Optional[str] = None
-    ranking: Optional[str] = None
-    ranking_global: Optional[int] = None
-    logo_url: Optional[str] = None
-    acceptance_rate: Optional[float] = None
-    accreditation: Optional[str] = None
-    student_population: Optional[int] = None
-
-
-class ProgramBase(BaseModel):
-    university_id: int
-    name: str
-    degree_level: str
-    duration_years: int
-    estimated_tuition_fees: int
-    currency: str
-    min_gpa: Optional[float] = None
-    ranking_global: Optional[int] = None
-    ranking_national: Optional[int] = None
-    min_ielts: Optional[float] = None
-    min_toefl: Optional[int] = None
-    application_deadline: Optional[str] = None
-    semester_intake: Optional[str] = None
-    living_cost_estimate: Optional[int] = None
-    scholarship_available: bool = False
-    program_url: Optional[str] = None
-
-
-class ProgramCreate(ProgramBase):
-    pass
-
-
-class ProgramOut(ORMBase):
-    id: int
-    university_id: int
-    name: str
-    degree_level: str
-    duration_years: int
-    estimated_tuition_fees: int
-    currency: str
-    min_gpa: Optional[float] = None
-    ranking_global: Optional[int] = None
-    ranking_national: Optional[int] = None
-    min_ielts: Optional[float] = None
-    min_toefl: Optional[int] = None
-    application_deadline: Optional[str] = None
-    semester_intake: Optional[str] = None
-    living_cost_estimate: Optional[int] = None
-    scholarship_available: bool = False
-    program_url: Optional[str] = None
-
-
-class StudentProfileBase(BaseModel):
-    gpa: float
-    gre_score: Optional[int] = None
-    toefl_score: Optional[int] = None
-    ielts_score: Optional[float] = None
-    budget_per_year: int
-    preferred_countries: List[str] = Field(default_factory=list)
-    intended_major: str
-    degree_level: str
-    academic_background: Optional[str] = None
-
-
-class StudentProfileCreate(StudentProfileBase):
-    pass
-
-
-class StudentProfileOut(ORMBase):
-    id: int
-    gpa: float
-    gre_score: Optional[int] = None
-    toefl_score: Optional[int] = None
-    ielts_score: Optional[float] = None
-    budget_per_year: int
-    preferred_countries: List[str]
-    intended_major: str
-    degree_level: str
-    academic_background: Optional[str] = None
-    created_at: Optional[datetime] = None
-
-
-class StudentProfileListResponse(BaseModel):
-    selected_profile_id: Optional[int] = None
-    profiles: List[StudentProfileOut] = Field(default_factory=list)
-
-
-class UniversityRecommendationRequest(BaseModel):
-    student_profile_id: int
-    intended_major: str
-
-
-class UniversityRecommendationItem(BaseModel):
-    university: UniversityOut
-    program: ProgramOut
-    match_score: int
-    explanation: str
-    cached: bool = False
-    cache_expires_at: Optional[datetime] = None
-
-
-class UniversityRecommendationResponse(BaseModel):
-    student_profile: StudentProfileOut
-    recommendations: List[UniversityRecommendationItem]
-
-
-class ScholarshipBase(BaseModel):
-    name: str
-    university_id: int
-    amount_usd: Optional[int] = None
-    deadline: Optional[str] = None
-    eligibility_criteria: Optional[str] = None
-    application_url: Optional[str] = None
-
-
-class ScholarshipCreate(ScholarshipBase):
-    pass
-
-
-class ScholarshipOut(ORMBase):
-    id: int
-    name: str
-    university_id: int
-    amount_usd: Optional[int] = None
-    deadline: Optional[str] = None
-    eligibility_criteria: Optional[str] = None
-    application_url: Optional[str] = None
-
-
-class UniversityProgramGroup(BaseModel):
-    university: UniversityOut
-    programs: List[ProgramOut]
-
-
-class UniversityFilterResponse(BaseModel):
-    page: int
-    limit: int
-    total: int
-    items: List[UniversityProgramGroup]
-
-
-class UniversityDetailResponse(BaseModel):
-    university: UniversityOut
-    programs: List[ProgramOut]
-    scholarships: List[ScholarshipOut]
-
-
-class StudentProfileUpdate(BaseModel):
-    gpa: Optional[float] = None
-    gre_score: Optional[int] = None
-    toefl_score: Optional[int] = None
-    ielts_score: Optional[float] = None
-    budget_per_year: Optional[int] = None
-    preferred_countries: Optional[List[str]] = None
-    intended_major: Optional[str] = None
-    degree_level: Optional[str] = None
-    academic_background: Optional[str] = None
-
-
-class StudentProgramMatchBase(BaseModel):
-    student_id: int
-    program_id: int
-    match_score: int
-    academic_fit: int
-    budget_fit: int
-    location_fit: int
-    missing_requirements: List[str] = Field(default_factory=list)
-    strengths: List[str] = Field(default_factory=list)
-    recommendations: List[str] = Field(default_factory=list)
-    summary: str
-    computed_at: datetime
-    expires_at: datetime
-
-
-class StudentProgramMatchOut(ORMBase):
-    id: int
-    student_id: int
-    program_id: int
-    match_score: int
-    academic_fit: int
-    budget_fit: int
-    location_fit: int
-    missing_requirements: List[str]
-    strengths: List[str]
-    recommendations: List[str]
-    summary: str
-    computed_at: datetime
-    expires_at: datetime
-
-
-class UniversityMatchRecommendRequest(BaseModel):
-    student_profile_id: int
-    limit: int = 20
-    min_match_score: int = 0
-    sort_by: str = "match_score"
-    filter_countries: List[str] = Field(default_factory=list)
-    filter_max_tuition: Optional[int] = None
-    filter_scholarship_only: bool = False
-
-
-class UniversityMatchProgramItem(BaseModel):
-    university: UniversityOut
-    program: ProgramOut
-    vector_similarity: int
-    match: StudentProgramMatchOut
-    cached: bool = False
-
-
-class UniversityMatchRecommendResponse(BaseModel):
-    student_profile: StudentProfileOut
-    results: List[UniversityMatchProgramItem]
-
-
-class UniversityMatchDetailResponse(BaseModel):
-    student_profile: StudentProfileOut
-    university: UniversityOut
-    program: ProgramOut
-    match: StudentProgramMatchOut
-    analysis: Dict[str, object]
-
-
-class StudentSaveRequest(BaseModel):
-    student_id: int
-    program_id: int
-
-
-class SavedProgramOut(ORMBase):
-    id: int
-    student_id: int
-    program_id: int
-    saved_at: datetime
-    program: Optional[ProgramOut] = None
-    university: Optional[UniversityOut] = None
-
-
-class StudentApplyRequest(BaseModel):
-    student_id: int
-    program_id: int
-    notes: Optional[str] = None
-
-
-class StudyApplicationUpdate(BaseModel):
-    status: str
-    notes: Optional[str] = None
-
-
-class StudyApplicationOut(ORMBase):
-    id: int
-    student_id: int
-    program_id: int
-    status: str
-    notes: Optional[str] = None
-    applied_at: Optional[datetime] = None
-    deadline: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    program: Optional[ProgramOut] = None
-    university: Optional[UniversityOut] = None

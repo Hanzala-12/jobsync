@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from core.url_ingestion import extract_job_text_from_url
-from core.database import get_db
+from backend.database import get_db
 from core.deduplicator import process_incoming_job
 from core.normalizer import normalize_job
 
@@ -17,13 +17,14 @@ class URLAnalyze(BaseModel):
 @router.post("/analyze-url")
 def analyze_url(req: URLAnalyze, db: Session = Depends(get_db)):
     """Analyze job posting from URL"""
+    parsed = req.url.strip()
+    if not parsed.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL scheme")
+
     job_data = extract_job_text_from_url(req.url)
-    
+
     if not job_data.get("success"):
-        raise HTTPException(
-            status_code=400,
-            detail=job_data.get("error", "Failed to extract job data")
-        )
+        raise HTTPException(status_code=400, detail=job_data.get("error", "Failed to extract job data"))
     
     normalized = normalize_job(
         {

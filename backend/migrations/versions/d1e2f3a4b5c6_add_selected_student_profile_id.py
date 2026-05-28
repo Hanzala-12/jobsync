@@ -19,7 +19,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('user_preferences', sa.Column('selected_student_profile_id', sa.Integer(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    cols = [c['name'] for c in inspector.get_columns('user_preferences')]
+    if 'selected_student_profile_id' not in cols:
+        op.add_column('user_preferences', sa.Column('selected_student_profile_id', sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:

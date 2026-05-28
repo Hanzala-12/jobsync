@@ -38,7 +38,7 @@ def _rate_limit():
     LAST_REQUEST_TIME = time.time()
 
 
-def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_pages: int = 1) -> List[Dict]:
+def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_pages: int = 1, max_results: int | None = None) -> List[Dict]:
     """
     Scrape Indeed Pakistan using Playwright to handle JavaScript rendering.
     Uses rate limiting to avoid bans.
@@ -123,6 +123,7 @@ def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_p
                 
                 print(f"[indeed] Found {len(job_cards)} job cards")
                 
+                stop = False
                 for card in job_cards:
                     try:
                         # Title - try multiple selectors
@@ -182,12 +183,19 @@ def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_p
                         }
                         
                         jobs.append(job)
+                        if max_results and len(jobs) >= max_results:
+                            stop = True
+                            break
                         print(f"[indeed]   ✓ {title[:60]}")
                         
                     except Exception as e:
                         print(f"[indeed] Error parsing card: {e}")
                         continue
                 
+                if stop:
+                    print(f"[indeed] Reached max_results={max_results}, stopping")
+                    break
+
                 # Break if we found fewer than 10 on this page (likely last page)
                 page_jobs = len(jobs) - (page_num * 10)
                 if page_jobs < 10:
@@ -206,7 +214,7 @@ def scrape_query(keyword: str = "software engineer", city: str = "lahore", max_p
 
 if __name__ == "__main__":
     print("Testing Indeed Pakistan scraper...")
-    jobs = scrape_query("python developer", "lahore", max_pages=1)
+    jobs = scrape_query("python developer", "lahore", max_pages=1, max_results=10)
     print(f"\nFound {len(jobs)} jobs:")
     for job in jobs[:5]:
         print(f"  - {job['title']} @ {job['company']}")

@@ -13,31 +13,21 @@ import MockInterview from './pages/MockInterview'
 import DailyScout from './pages/DailyScout'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
-import StudentProfileForm from './components/StudentProfileForm'
-import UniversityDashboard from './components/UniversityDashboard'
-import UniversityMatchList from './components/UniversityMatchList'
-import MyApplications from './components/MyApplications'
-import StudentUniversitySearch from './components/StudentUniversitySearch'
-import StudentSavedUniversities from './components/StudentSavedUniversities'
-import StudentScholarships from './components/StudentScholarships'
+// university-related components removed
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 const AUTH_BYPASS = (import.meta.env.VITE_AUTH_BYPASS || '').toString().toLowerCase() === 'true'
 
 function AppRoutes() {
-  const { authLoading, isAuthenticated, studentProfileId, setStudentProfileId, handleAuth, handleLogout } = useAuth()
-  const handleStudentProfileCreated = (profileId) => {
-    const nextProfileId = Number(profileId) || 0
-    setStudentProfileId(nextProfileId)
-  }
+  const { authLoading, isAuthenticated, handleAuth, handleLogout } = useAuth()
 
-  if (authLoading) {
+    if (authLoading) {
     return (
       <div className="auth-shell">
         <section className="auth-panel">
           <div className="auth-card">
             <h1>Loading your workspace</h1>
-            <p className="subtitle">Checking your session and study profile...</p>
+            <p className="subtitle">Checking your session...</p>
           </div>
         </section>
       </div>
@@ -52,10 +42,7 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     ) : (
-      <Layout
-        studentProfileId={studentProfileId}
-        onLogout={handleLogout}
-      >
+      <Layout onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/resume" element={<Resume />} />
@@ -68,14 +55,7 @@ function AppRoutes() {
           <Route path="/mock-interview" element={<MockInterview />} />
           <Route path="/skill-gap" element={<SkillGap />} />
           <Route path="/daily-scout" element={<DailyScout />} />
-          <Route path="/student" element={<Navigate to={studentProfileId ? '/student/dashboard' : '/student/profile'} replace />} />
-          <Route path="/student/profile" element={<StudentProfileForm onCreated={handleStudentProfileCreated} />} />
-          <Route path="/student/dashboard" element={<UniversityDashboard profileId={studentProfileId} />} />
-          <Route path="/student/search" element={<StudentUniversitySearch profileId={studentProfileId} />} />
-          <Route path="/student/matches" element={<UniversityMatchList profileId={studentProfileId} />} />
-          <Route path="/student/saved" element={<StudentSavedUniversities profileId={studentProfileId} />} />
-          <Route path="/student/applications" element={<MyApplications profileId={studentProfileId} />} />
-          <Route path="/student/scholarships" element={<StudentScholarships profileId={studentProfileId} />} />
+          {/* student/university routes removed */}
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/signup" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Body
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -32,7 +32,7 @@ def _token_response(user: User) -> AuthToken:
 
 
 @router.post("/signup", response_model=AuthToken)
-def signup(payload: UserCreate, db: Session = Depends(get_db)):
+def signup(payload: UserCreate, response: Response, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     if not email:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Email is required")
@@ -47,23 +47,38 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _token_response(user)
+    token_resp = _token_response(user)
+    # set refresh token as HttpOnly cookie
+    cookie_secure = (str(__import__("os").environ.get("ENV", "")).lower() == "production")
+    response.set_cookie("refresh_token", token_resp.refresh_token, httponly=True, secure=cookie_secure, samesite="lax")
+    return token_resp
 
 
 @router.post("/login", response_model=AuthToken)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+def login(payload: UserLogin, response: Response, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     user = get_user_by_email(db, email)
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
-    return _token_response(user)
+    token_resp = _token_response(user)
+    cookie_secure = (str(__import__("os").environ.get("ENV", "")).lower() == "production")
+    response.set_cookie("refresh_token", token_resp.refresh_token, httponly=True, secure=cookie_secure, samesite="lax")
+    return token_resp
 
 
 @router.post("/refresh", response_model=AuthToken)
-def refresh(payload: dict, db: Session = Depends(get_db)):
-    refresh_token = str(payload.get("refresh_token") or "").strip()
+def refresh(request: Request, response: Response, payload: dict = Body(default_factory=dict), db: Session = Depends(get_db)):
+    # Accept refresh token either in HttpOnly cookie or request payload
+    refresh_token = ""
+    try:
+        refresh_token = (request.cookies.get("refresh_token") or "").strip()
+    except Exception:
+        refresh_token = ""
+    if not refresh_token and payload:
+        refresh_token = str(payload.get("refresh_token") or "").strip()
+
     if not refresh_token:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="refresh_token is required")
 
@@ -81,7 +96,10 @@ def refresh(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     if int(decoded.get("ver", 0) or 0) != int(getattr(user, "token_version", 0) or 0):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
-    return _token_response(user)
+    token_resp = _token_response(user)
+    cookie_secure = (str(__import__("os").environ.get("ENV", "")).lower() == "production")
+    response.set_cookie("refresh_token", token_resp.refresh_token, httponly=True, secure=cookie_secure, samesite="lax")
+    return token_resp
 
 
 @router.get("/me", response_model=UserOut)
@@ -90,7 +108,7 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/logout")
-def logout(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def logout(current_user: User = Depends(get_current_user), response: Response = None, db: Session = Depends(get_db)):
     current_user.token_version = int(getattr(current_user, "token_version", 0) or 0) + 1
     db.commit()
     return {"success": True}

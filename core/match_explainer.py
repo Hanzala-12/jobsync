@@ -15,10 +15,21 @@ def _now() -> float:
 
 
 def calculate_skill_match(profile_skills: List[str], job_skills: List[str]) -> Tuple[List[str], List[str]]:
-    p = {normalize_skill(s).lower() for s in (profile_skills or []) if s}
-    j = {normalize_skill(s).lower() for s in (job_skills or []) if s}
-    matched = sorted([s.title() for s in (p & j)])
-    missing = sorted([s.title() for s in (j - p)])
+    profile_map = {}
+    for skill in profile_skills or []:
+        normalized = normalize_skill(skill)
+        if normalized:
+            profile_map.setdefault(normalized.lower(), normalized)
+
+    job_map = {}
+    for skill in job_skills or []:
+        normalized = normalize_skill(skill)
+        if normalized:
+            job_map.setdefault(normalized.lower(), normalized)
+
+    matched_keys = sorted(profile_map.keys() & job_map.keys())
+    matched = sorted([job_map[key] for key in matched_keys], key=str.lower)
+    missing = sorted([job_map[key] for key in (job_map.keys() - profile_map.keys())], key=str.lower)
     return matched, missing
 
 

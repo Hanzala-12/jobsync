@@ -1,12 +1,20 @@
-import json
 import logging
 import sys
 import time
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+try:
+    from pythonjsonlogger import jsonlogger
+    _HAS_JSONLOGGER = True
+except Exception:  # pragma: no cover - optional dependency in lightweight dev envs
+    jsonlogger = None
+    _HAS_JSONLOGGER = False
+
+from backend.monitoring import record_http_request
 
 
 _STANDARD_LOG_RECORD_ATTRS = {
@@ -45,22 +53,20 @@ def _json_safe(value: Any) -> Any:
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        payload = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "level": record.levelname,
-            "module": record.name,
-            "message": record.getMessage(),
-        }
-
-        for key, value in record.__dict__.items():
-            if key in _STANDARD_LOG_RECORD_ATTRS or key.startswith("_"):
-                continue
-            payload[key] = _json_safe(value)
-
+        if _HAS_JSONLOGGER and jsonlogger is not None:
+            formatter = jsonlogger.JsonFormatter(
+                "timestamp level module message request_id method path status duration_ms",
+                rename_fields={"levelname": "level", "name": "module", "message": "message"},
+            )
+        else:
+            # Fallback plain formatter when pythonjsonlogger isn't available
+            formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        record.timestamp = datetime.now(timezone.utc).isoformat()
+        if not getattr(record, "request_id", None):
+            record.request_id = None
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
-
-        return json.dumps(payload, ensure_ascii=False)
+            record.exception = self.formatException(record.exc_info)
+        return formatter.format(record)
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -84,6 +90,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         logger = logging.getLogger("backend.request")
         start = time.perf_counter()
+        request_id = request.headers.get("x-request-id") or uuid4().hex
+        request.state.request_id = request_id
+        endpoint = getattr(getattr(request.scope, "get", lambda *_: None)("route"), "path", None) or request.url.path
 
         try:
             response = await call_next(request)
@@ -92,8 +101,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             logger.exception(
                 "request_failed",
                 extra={
+                    "request_id": request_id,
                     "method": request.method,
-                    "path": request.url.path,
+                    "path": endpoint,
+                    "status": 500,
                     "duration_ms": duration_ms,
                 },
             )
@@ -103,10 +114,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         logger.info(
             "request_completed",
             extra={
+                "request_id": request_id,
                 "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
+                "path": endpoint,
+                "status": response.status_code,
                 "duration_ms": duration_ms,
             },
         )
+        record_http_request(request.method, endpoint, response.status_code)
         return response

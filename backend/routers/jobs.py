@@ -36,6 +36,7 @@ from backend.services.job_apis import (
     get_pakistan_source_status,
     search_jobs,
 )
+from backend.services.job_ranking import rerank_job_candidates
 import requests
 from scrapers.rozee_scraper import ROZEE_USER_AGENT, BASE_URL
 from core.deduplicator import process_incoming_job
@@ -43,9 +44,11 @@ from core.llm_provider import LLMProvider
 from core.normalizer import normalize_job
 from core.skill_extractor import extract_skills
 from core.match_explainer import explain_match_for
+from backend.services.profile_data import parse_int, parse_string_list, parse_float
 # lazy import RAG functions inside _upsert_jobs to avoid heavy startup imports
 from backend.database import engine
-from backend.security import get_current_user, get_current_user_from_stream
+from backend.security import get_current_user, get_current_user_from_stream, get_optional_current_user
+from backend.tasks.cover_letter_tasks import dispatch_cover_letter_generation
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 _logger = logging.getLogger(__name__)
@@ -134,6 +137,107 @@ def _normalize_skill_list(values) -> List[str]:
         seen.add(lowered)
         cleaned.append(skill)
     return cleaned
+
+
+def _parse_salary_value(value: str | None) -> int | None:
+    if not value:
+        return None
+    text = str(value).lower().replace(",", "")
+    match = re.search(r"(?:pk)?r?\$?\s*(\d+(?:\.\d+)?)\s*([km]?)", text)
+    if not match:
+        match = re.search(r"(\d+(?:\.\d+)?)", text)
+        if not match:
+            return None
+        return int(float(match.group(1)))
+    amount = float(match.group(1))
+    suffix = match.group(2)
+    if suffix == "k":
+        amount *= 1000
+    elif suffix == "m":
+        amount *= 1000000
+    return int(amount)
+
+
+def _profile_skill_values(profile: UserProfile | None) -> list[str]:
+    if not profile:
+        return []
+    values = getattr(profile, "skills", None)
+    if values:
+        return parse_string_list(values)
+    resume_text = getattr(profile, "resume_text", None) or ""
+    return extract_skills(resume_text, limit=50)
+
+
+def _get_selected_profile(db: Session, user_id: int) -> UserProfile | None:
+    try:
+        from backend.models import UserPreference
+
+        selected_id = None
+        pref = db.query(UserPreference).filter(UserPreference.user_id == user_id).order_by(UserPreference.updated_at.desc(), UserPreference.id.desc()).first()
+        if pref and pref.selected_profile_id:
+            selected_id = int(pref.selected_profile_id)
+        if selected_id:
+            profile = db.query(UserProfile).filter(UserProfile.id == selected_id, UserProfile.user_id == user_id).first()
+            if profile:
+                return profile
+    except Exception:
+        pass
+    return db.query(UserProfile).filter(UserProfile.user_id == user_id).order_by(UserProfile.created_at.desc(), UserProfile.id.desc()).first()
+
+
+def _score_job_for_profile(job: Job, profile: UserProfile | None) -> tuple[float, bool]:
+    if not profile:
+        return 0.0, True
+
+    title = (job.title or "").lower()
+    description = (job.description or "").lower()
+    location_text = " ".join(filter(None, [job.location, job.city])).lower()
+
+    preferred_titles = [item.lower() for item in parse_string_list(getattr(profile, "preferred_job_titles", None))]
+    profile_location = (profile.location or "").lower()
+    preferred_work_location = (profile.preferred_work_location or "").lower()
+    profile_skills = [skill.lower() for skill in _profile_skill_values(profile)]
+    job_skills = [skill.lower() for skill in parse_string_list(getattr(job, "job_skills", None))]
+
+    score = 0.0
+    if preferred_titles:
+        if any(title_pref in title for title_pref in preferred_titles):
+            score += 28
+        if any(title_pref in description for title_pref in preferred_titles):
+            score += 14
+
+    if profile_skills:
+        overlap = {skill for skill in profile_skills if skill and (skill in title or skill in description or skill in job_skills)}
+        score += min(30, len(overlap) * 5)
+
+    if profile_location and profile_location in location_text:
+        score += 12
+    elif profile_location and any(part in location_text for part in profile_location.split() if len(part) > 2):
+        score += 6
+
+    if preferred_work_location:
+        if preferred_work_location in {"remote", "hybrid", "onsite"}:
+            if preferred_work_location == "remote" and ("remote" in title or "remote" in description or "remote" in location_text):
+                score += 10
+            elif preferred_work_location == "hybrid" and "hybrid" in (title + " " + description + " " + location_text):
+                score += 8
+            elif preferred_work_location == "onsite" and "onsite" in (title + " " + description + " " + location_text):
+                score += 8
+        elif preferred_work_location in location_text:
+            score += 8
+
+    salary_min = parse_int(getattr(profile, "desired_salary_min", None))
+    salary_max = parse_int(getattr(profile, "desired_salary_max", None))
+    parsed_salary = _parse_salary_value(job.salary)
+    if salary_min and parsed_salary and parsed_salary < salary_min:
+        return score - 50, False
+    if salary_max and parsed_salary and parsed_salary > salary_max:
+        score -= 6
+
+    if getattr(profile, "willing_to_relocate", False) and location_text:
+        score += 2
+
+    return score, True
 
 
 def _extract_skills_from_text(text: str, limit: int = 12) -> List[str]:
@@ -274,29 +378,7 @@ def _log_background_future_error(future):
 
 
 def _bg_generate_cover_letter(job_id, resume_text, company, role, job_description, source, job_url):
-    from core.rag_service import generate_cover_letter_with_rag, save_cover_letter_artifacts
-
-    draft, source_ids, retrieved_chunks = generate_cover_letter_with_rag(
-        job_description,
-        resume_text,
-        company_name=company,
-        role=role,
-        tone="professional",
-        top_k=5,
-        metadata_filter={"company": company} if company else None,
-    )
-    save_cover_letter_artifacts(
-        job_id,
-        draft,
-        source_ids,
-        retrieved_chunks,
-        metadata={
-            "company": company,
-            "role": role,
-            "source": source,
-            "job_url": job_url,
-        },
-    )
+    dispatch_cover_letter_generation(job_id, resume_text, company, role, job_description, source, job_url)
 
 
 @router.get("/search", response_model=List[JobOut])
@@ -310,6 +392,7 @@ def search_jobs_endpoint(
     page: int = 1,
     limit: int = 20,
     sort: str = "newest",
+    current_user = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
     live_jobs = search_jobs(
@@ -328,6 +411,18 @@ def search_jobs_endpoint(
     page = max(1, page)
     limit = max(1, min(100, limit))
     items = q.offset((page - 1) * limit).limit(limit).all()
+
+    profile = _get_selected_profile(db, current_user.id) if current_user else None
+    if profile:
+        scored_items = []
+        for job in items:
+            score, include = _score_job_for_profile(job, profile)
+            if include:
+                scored_items.append((score, job))
+        scored_items.sort(key=lambda pair: (pair[0], pair[1].id or 0), reverse=True)
+        items = [job for _, job in scored_items]
+
+    items = rerank_job_candidates(query, items, profile=profile)
 
     def job_to_out(j: Job):
         return JobOut.model_validate(
@@ -541,7 +636,7 @@ def match_job(job_id: int, current_user = Depends(get_current_user), db: Session
     if not job_skills:
         job_skills = extract_skills(job_text, limit=50)
 
-    profile_skills = (getattr(profile, "profile_skills", None) or [])
+    profile_skills = parse_string_list(getattr(profile, "skills", None))
     if not profile_skills:
         profile_skills = extract_skills(resume_text, limit=50)
 

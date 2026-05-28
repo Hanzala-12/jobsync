@@ -1,0 +1,176 @@
+You are a senior technical auditor and software architect. Your task is to perform a **staged, incremental, deep‑analysis audit** of my entire JobSync Pro project. You will work through **predefined phases**, and after **each phase** you will write your findings into a markdown report (`AUDIT_REPORT.md`). You will then proceed to the next phase, appending to the same report, until all phases are complete.
+
+## Important Rules
+
+- **Do not skip any file.** Read every relevant file in the order specified.
+- **After each phase, update the report immediately** – do not wait until the end.
+- **Be exhaustive** – list every endpoint, component, service, scraper, script, and configuration.
+- **Be critical** – note what is missing, half‑done, broken, or not production‑ready.
+- **Keep the report structured** – use headings, tables, lists, code blocks.
+- **If you encounter a file that doesn’t exist, note it as MISSING** and continue.
+
+## Phase Breakdown (execute in order)
+
+### Phase 1: Project Overview & Technology Stack
+- Read `README.md`, `package.json`, `requirements.txt`, `.env.example`, `docker-compose*.yml` (if any), `vercel.json`, `vite.config.js`.
+- Identify:
+  - Frontend framework & version (React, Vite, etc.)
+  - Backend framework & version (FastAPI, Python)
+  - Database (SQLite, PostgreSQL, Supabase)
+  - Vector database (ChromaDB)
+  - LLM integration (OpenRouter, Groq, etc.)
+  - Deployment targets (Vercel, GitHub Actions)
+  - Testing frameworks (if any)
+- **Write Phase 1 findings** to `AUDIT_REPORT.md` under a heading `## Phase 1: Technology Stack`.
+
+### Phase 2: Backend – Models, Database, & Core Infrastructure
+- Read `backend/database.py`, `backend/models.py`, `backend/schemas.py`.
+- Read Alembic migrations in `backend/migrations/versions/`.
+- Read `backend/main.py` (startup, middleware, exception handlers, CORS, rate limiting).
+- Note:
+  - All SQLAlchemy models (jobs, universities, programs, student profiles, applications, etc.)
+  - Database connection logic (SQLite vs Supabase, pooling, WAL, SSL)
+  - Migration status (are migrations up to date? any multiple heads?)
+  - Health check endpoints
+  - Startup guards (schema validation, environment checks)
+- **Append Phase 2 findings** to the report under `## Phase 2: Backend – Database & Core`.
+
+### Phase 3: Backend – Routers & Endpoints (Job Module)
+- Read all files in `backend/routers/` that are job‑related: `jobs.py`, `profile.py`, `applications.py`, `cover_letter.py`, `intelligence.py`, `voice_interview.py`, `browser_extension.py`, `kanban.py`, `followup.py`, `scout.py`.
+- For each endpoint, record:
+  - Path, method, purpose
+  - Authentication requirements (if any)
+  - Input validation (Pydantic models or raw dicts)
+  - Error handling (HTTPException, fallbacks)
+  - Dependencies (LLM, database, external APIs)
+  - Status (✅ fully implemented, ⚠️ partial, ❌ broken/missing)
+- **Append Phase 3 findings** under `## Phase 3: Backend – Job Module Endpoints`.
+
+### Phase 4: Backend – Routers & Endpoints (Student / University Module)
+- Read `backend/routers/student.py`.
+- Also read any other study‑related routers (if separate).
+- For each student endpoint (profile, match/recommend, universities/filter, detail, save, apply, applications), record the same details as in Phase 3.
+- **Append Phase 4 findings** under `## Phase 4: Backend – Student Module Endpoints`.
+
+### Phase 5: Backend – Core Services & AI Techniques
+- Read all files in `core/`: `rag_service.py`, `llm_provider.py`, `skill_extractor.py`, `match_explainer.py`, `deduplicator.py`, `normalizer.py`, `geo.py`, `scheduler.py`, `engine.py`, `daily_scout.py`, `pdf_generator.py`.
+- For each service, note:
+  - What it does
+  - AI/ML techniques used (embeddings, RAG, skill normalisation, explainable matching, heuristic fallbacks)
+  - External dependencies (ChromaDB, sentence‑transformers, spaCy, etc.)
+  - Performance considerations (blocking vs async, caching, retries)
+  - Strengths and weaknesses
+- **Append Phase 5 findings** under `## Phase 5: Core Services & AI Techniques`.
+
+### Phase 6: Backend – Scrapers & Data Ingestion
+- Read all files in `scrapers/` and `scripts/` that are related to job or university ingestion: `rozee_scraper.py`, `mustakbil_scraper.py`, `indeed_scraper.py`, `brightspyre_scraper.py`, `common.py`, `ingest_universities.py`, `enrich_universities.py`, `ingest_programs_to_vector_db.py`, `refresh_match_cache.py`, `backfill_skills.py`.
+- For each, note:
+  - Source (Rozee, Mustakbil, QS, Erasmus, etc.)
+  - How it works (requests, Playwright, raw HTML parsing)
+  - Error handling and rate limiting
+  - Whether it runs on a schedule (GitHub Actions, scheduler)
+  - Data quality (mock data vs real, completeness)
+- **Append Phase 6 findings** under `## Phase 6: Scrapers & Data Ingestion`.
+
+### Phase 7: Frontend – Structure, Routing, & State Management
+- Read `frontend/src/App.jsx`, `frontend/src/main.jsx`, `frontend/src/api/client.js`, `frontend/src/context/AuthContext.jsx` (if exists).
+- Read routing configuration and any state management (Redux, Context, localStorage).
+- Note:
+  - How authentication is handled (real JWT vs localStorage)
+  - API client interceptors (auth headers, error handling)
+  - Route guards and protected pages
+  - Overall frontend architecture (component organisation, hooks)
+- **Append Phase 7 findings** under `## Phase 7: Frontend – Architecture & State`.
+
+### Phase 8: Frontend – Pages & Components (Job Module)
+- Read all files in `frontend/src/pages/` related to jobs: `Jobs.jsx`, `Profile.jsx`, `Applications.jsx`, `CoverLetter.jsx`, `Interview.jsx`, `SkillGap.jsx`, `Kanban.jsx`, `MockInterview.jsx`, `DailyScout.jsx`, `Dashboard.jsx`.
+- For each page, note:
+  - What user actions it supports
+  - API calls made
+  - UI state (loading, error, empty states)
+  - Responsiveness and UX polish
+  - Missing features or bugs
+- Also read reusable components like `MatchPanel.jsx`, `Button.jsx`, `Card.jsx`.
+- **Append Phase 8 findings** under `## Phase 8: Frontend – Job Module Pages & Components`.
+
+### Phase 9: Frontend – Pages & Components (Student Module)
+- Read `frontend/src/components/StudentProfileForm.jsx`, `UniversityDashboard.jsx`, `UniversityMatchList.jsx`, `UniversityDetailModal.jsx`, `MyApplications.jsx`.
+- Also read any student‑related pages in `frontend/src/pages/` (e.g., if separated).
+- For each, note:
+  - Functionality (profile creation, matching, saving, applications)
+  - API integration
+  - UI/UX strengths and issues (e.g., load‑more replaces results, missing loading states)
+- **Append Phase 9 findings** under `## Phase 9: Frontend – Student Module Components`.
+
+### Phase 10: Chrome Extension & CLI Tool
+- Read `extension/manifest.json`, `extension/popup.js`, `extension/background.js` (if exists).
+- Read `app.py` (CLI tool).
+- Note:
+  - Extension permissions and features (1‑click save, content scripts, auth)
+  - CLI commands and workflows
+  - Integration with backend (API endpoints used)
+- **Append Phase 10 findings** under `## Phase 10: Chrome Extension & CLI Tool`.
+
+### Phase 11: Infrastructure, Deployment & CI/CD
+- Read `.github/workflows/*.yml` files.
+- Read `Dockerfile`, `docker-compose*.yml` (if any).
+- Read `vercel.json` or other deployment configs.
+- Note:
+  - GitHub Actions workflows (cron schedules, secrets, scripts run)
+  - Containerisation (if any)
+  - Deployment targets (Vercel, Railway, etc.)
+  - Environment variables required for production
+- **Append Phase 11 findings** under `## Phase 11: Infrastructure & CI/CD`.
+
+### Phase 12: Testing & Verification
+- Read all test scripts: `scripts/test_*.py`, `scripts/verify_*.py`, `scripts/qa_*.py`, `scripts/asgi_smoke_test.py`, `scripts/run_all_tests.py`.
+- Also read any frontend tests (if exist).
+- Note:
+  - Coverage of endpoints, services, and UI
+  - What is tested and what is not
+  - Whether tests pass in CI
+  - Gaps in testing (e.g., no authentication tests, no database rollback)
+- **Append Phase 12 findings** under `## Phase 12: Testing & Verification`.
+
+### Phase 13: Security & Authentication
+- Review authentication implementation (if any) across backend and frontend.
+- Check for:
+  - Real JWT vs fake localStorage
+  - Password hashing (bcrypt, etc.)
+  - Session management
+  - API authorisation (does each endpoint check user identity?)
+  - CORS settings, rate limiting, input validation
+  - Secrets management (`.env`, GitHub Secrets)
+- **Append Phase 13 findings** under `## Phase 13: Security & Authentication`.
+
+### Phase 14: Feature Completion & Gap Analysis
+- Compare the initial project vision (from README and conversation history) with the current implementation.
+- List all promised features and mark them as:
+  - ✅ Fully implemented
+  - ⚠️ Partially implemented (describe what’s missing)
+  - ❌ Not implemented
+- Also list features that are implemented but not documented.
+- **Append Phase 14 findings** under `## Phase 14: Feature Completion & Gap Analysis`.
+
+### Phase 15: Overall Assessment & Recommendations
+- Summarise:
+  - Overall completion percentage
+  - Production readiness score (0‑100)
+  - Top 3 strengths
+  - Top 3 critical issues
+  - Estimated hours to production readiness
+  - Immediate, short‑term, and long‑term recommendations
+- **Append Phase 15 findings** as the final section of the report.
+
+## Final Report Format
+
+The final `AUDIT_REPORT.md` must contain all 15 phases in order. Each phase must have a clear heading, tables where appropriate, and specific file references. The report should be suitable for a technical stakeholder to understand exactly what is done, what is missing, and what needs fixing.
+
+## Execution Instructions
+
+- Start with Phase 1. After completing Phase 1, write to `AUDIT_REPORT.md` and then proceed to Phase 2.
+- Continue sequentially. Do not skip any phase.
+- If a file or directory does not exist, note it as MISSING and continue.
+- Be thorough – this audit is the basis for your final production push.
+
+Do not ask for confirmation. Begin Phase 1 now.

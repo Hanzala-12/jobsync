@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { authAPI, clearAuthToken, getStoredAuthToken, setAuthToken, setRefreshToken, studentAPI } from '../api/client'
+import { authAPI, clearAuthToken, getStoredAuthToken, setAuthToken } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -10,21 +10,23 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const bootstrap = async () => {
+      // Attempt to bootstrap from stored access token or by refreshing via HttpOnly cookie
       const token = getStoredAuthToken()
-      if (!token) {
-        setAuthLoading(false)
-        return
+      if (token) {
+        setAuthToken(token)
+      } else {
+        try {
+          const refreshResp = await authAPI.refresh().catch(() => null)
+          const newAccess = refreshResp?.data?.access_token
+          if (newAccess) setAuthToken(newAccess)
+        } catch {
+          // ignore
+        }
       }
 
-      setAuthToken(token)
       try {
-        const [, profileResponse] = await Promise.all([
-          authAPI.me(),
-          studentAPI.listProfiles().catch(() => null),
-        ])
+        await authAPI.me()
         setIsAuthenticated(true)
-        const profileId = Number(profileResponse?.data?.selected_profile_id || 0)
-        setStudentProfileId(profileId)
       } catch {
         clearAuthToken()
         setIsAuthenticated(false)
@@ -50,22 +52,15 @@ export function AuthProvider({ children }) {
     if (authData?.access_token) {
       setAuthToken(authData.access_token)
     }
-    if (authData?.refresh_token) {
-      setRefreshToken(authData.refresh_token)
-    }
     setIsAuthenticated(true)
-
-    try {
-      const response = await studentAPI.listProfiles()
-      const profileId = Number(response.data?.selected_profile_id || 0)
-      setStudentProfileId(profileId)
-    } catch {
-      setStudentProfileId(0)
-    }
   }
 
-  const handleLogout = () => {
-    authAPI.logout().catch(() => null)
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout()
+    } catch {
+      // Clear local auth state even if the network call fails.
+    }
     clearAuthToken()
     setIsAuthenticated(false)
     setStudentProfileId(0)
@@ -80,7 +75,17 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+  if (!ctx) {
+    // Return safe defaults to avoid runtime crashes when called outside provider
+    return {
+      authLoading: true,
+      isAuthenticated: false,
+      studentProfileId: 0,
+      setStudentProfileId: () => {},
+      handleAuth: async () => {},
+      handleLogout: () => {},
+    }
+  }
   return ctx
 }
 

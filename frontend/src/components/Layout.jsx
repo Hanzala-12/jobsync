@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import {
   Briefcase, LayoutDashboard, User, FileText, CheckSquare, 
   MessageSquare, Video, Target, TrendingUp, LogOut,
-  GraduationCap, Search, Heart, Award
+  
 } from 'lucide-react'
 import './Layout.css'
 
@@ -21,47 +21,19 @@ const careerLinks = [
   { path: '/daily-scout', label: 'Daily Scout', icon: TrendingUp },
 ]
 
-const universityLinks = [
-  { path: '/student/profile', label: 'Student Profile', icon: User },
-  { path: '/student/dashboard', label: 'University Portal', icon: GraduationCap },
-  { path: '/student/search', label: 'University Search', icon: Search },
-  { path: '/student/matches', label: 'Match Recommendations', icon: Target },
-  { path: '/student/saved', label: 'Saved Universities', icon: Heart },
-  { path: '/student/applications', label: 'Study Applications', icon: CheckSquare },
-  { path: '/student/scholarships', label: 'Scholarships', icon: Award },
-]
+ 
 
 const Layout = ({ children, studentProfileId = 0, onLogout }) => {
   const location = useLocation()
   const navigate = useNavigate()
   
-  const [module, setModule] = useState(() => {
-    return location.pathname.startsWith('/student') ? 'university' : 'career'
-  })
-
-  useEffect(() => {
-    if (location.pathname.startsWith('/student')) {
-      setModule('university')
-    } else if (location.pathname !== '/login' && location.pathname !== '/signup') {
-      setModule('career')
-    }
-  }, [location.pathname])
-
-  const handleModuleSwitch = (newModule) => {
-    setModule(newModule)
-    if (newModule === 'career') {
-      navigate('/')
-    } else {
-      navigate('/student')
-    }
-  }
+  const [module, setModule] = useState('career')
 
   // Decide main class based on path if needed
   const isKanban = location.pathname === '/kanban'
-  const isStudyRoute = location.pathname.startsWith('/student')
 
   return (
-    <div className={`layout ${isStudyRoute ? 'is-university' : 'is-career'}`}>
+    <div className={`layout is-career`}>
       <style>{`
         .custom-nav-item {
           display: flex;
@@ -110,53 +82,7 @@ const Layout = ({ children, studentProfileId = 0, onLogout }) => {
           <span className="logo-text">JobSync</span>
         </div>
 
-        <div style={{
-          display: 'flex',
-          margin: '12px 10px',
-          background: '#f0f0f0',
-          borderRadius: '8px',
-          padding: '3px',
-          gap: '2px',
-        }}>
-          <button
-            onClick={() => handleModuleSwitch('career')}
-            style={{
-              flex: 1,
-              padding: '6px 0',
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 600,
-              fontFamily: 'inherit',
-              background: module === 'career' ? '#ffffff' : 'transparent',
-              color: module === 'career' ? '#111111' : '#888888',
-              boxShadow: module === 'career' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
-              transition: 'all 0.15s',
-            }}
-          >
-            💼 Career
-          </button>
-          <button
-            onClick={() => handleModuleSwitch('university')}
-            style={{
-              flex: 1,
-              padding: '6px 0',
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 600,
-              fontFamily: 'inherit',
-              background: module === 'university' ? '#7c3aed' : 'transparent',
-              color: module === 'university' ? '#ffffff' : '#888888',
-              boxShadow: module === 'university' ? '0 1px 3px rgba(124,58,237,0.3)' : 'none',
-              transition: 'all 0.15s',
-            }}
-          >
-            🎓 University
-          </button>
-        </div>
+        {/* career-only navigation */}
 
         <div className="sidebar-scroll" style={{ padding: '0 10px' }}>
           {module === 'career' && (
@@ -174,20 +100,7 @@ const Layout = ({ children, studentProfileId = 0, onLogout }) => {
             </div>
           )}
 
-          {module === 'university' && (
-            <div className="nav-section university-section">
-              {universityLinks.map((item) => {
-                const active = location.pathname === item.path
-                const Icon = item.icon
-                return (
-                  <Link key={item.path} to={item.path} onClick={() => setModule('university')} className={`custom-nav-item university-link ${active ? 'university-active' : ''}`}>
-                    <Icon size={16} strokeWidth={active ? 2.5 : 2} style={{ opacity: active ? 1 : 0.75 }} />
-                    <span>{item.label}</span>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
+          {/* university links removed */}
         </div>
 
         <div className="sidebar-footer">

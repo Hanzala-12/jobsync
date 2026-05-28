@@ -168,6 +168,15 @@ def get_current_user(token: str | None = Depends(oauth2_scheme), db: Session = D
     return user
 
 
+def get_optional_current_user(token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User | None:
+    if not token:
+        return None
+    try:
+        return get_current_user(token=token, db=db)
+    except HTTPException:
+        return None
+
+
 def get_current_user_from_stream(
     token: str | None = Depends(oauth2_scheme),
     stream_token: str | None = Query(default=None, alias="token"),

@@ -180,11 +180,14 @@ def scrape_query(keyword: str = "software engineer", city: Optional[str] = "laho
     return jobs
 
 
-def run(db: Session, keyword_limit: int | None = None, city_limit: int | None = None) -> List[Dict]:
+def run(db: Session, keyword_limit: int | None = None, city_limit: int | None = None, max_results: int | None = None) -> List[Dict]:
     results = []
     for keyword in KEYWORDS[: keyword_limit or len(KEYWORDS)]:
         for city in CITIES[: city_limit or len(CITIES)]:
-            results.extend(normalize_and_store(db, scrape_query(keyword, city), SOURCE))
+            batch = normalize_and_store(db, scrape_query(keyword, city), SOURCE)
+            results.extend(batch)
+            if max_results and len(results) >= max_results:
+                return results[:max_results]
     return results
 
 

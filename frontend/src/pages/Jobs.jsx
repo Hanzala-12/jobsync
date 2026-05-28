@@ -1,13 +1,17 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
-import { applicationsAPI, jobsAPI, profileAPI, API_BASE_URL, getStoredAuthToken } from '../api/client'
-import searchStream from '../services/searchStream'
-import { Search, MapPin, ExternalLink, Activity, FileText, CheckCircle2 } from 'lucide-react'
+import { applicationsAPI, jobsAPI } from '../api/client'
+import { Search, MapPin, ExternalLink, CheckCircle2 } from 'lucide-react'
 import './Jobs.css'
+import ResumeModal from '../components/ResumeModal'
+
+const PAGE_SIZE = 20
 
 const LOCATION_OPTIONS = ['Pakistan', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'UAE', 'UK', 'Remote']
 const PAK_CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad']
+// Job actions should be available once the profile is reasonably complete.
+const PROFILE_COMPLETENESS_THRESHOLD = 30
 
 const countryMap = {
   Pakistan: 'pk',
@@ -46,10 +50,10 @@ function Jobs() {
   const [remoteOnly, setRemoteOnly] = useState(false)
   const [pakistanOnly, setPakistanOnly] = useState(false)
   const [jobs, setJobs] = useState([])
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [streamingCount, setStreamingCount] = useState(0)
-  const [streamElapsed, setStreamElapsed] = useState(0)
   
   const [matchModalOpen, setMatchModalOpen] = useState(false)
   const [matchModalLoading, setMatchModalLoading] = useState(false)
@@ -57,14 +61,15 @@ function Jobs() {
   
   const [toast, setToast] = useState('')
   const [profileExists, setProfileExists] = useState(false)
+  const [profileCompleteness, setProfileCompleteness] = useState(0)
   const [salaryCard, setSalaryCard] = useState(null)
   const [salaryData, setSalaryData] = useState(null)
+  const [resumeModalOpen, setResumeModalOpen] = useState(false)
+  const [resumeModalJob, setResumeModalJob] = useState(null)
   
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
 
-  const localCount = useMemo(() => jobs.filter((job) => job.source === 'adzuna').length, [jobs])
-  const remoteCount = useMemo(() => jobs.filter((job) => job.source !== 'adzuna').length, [jobs])
   const resultText = useMemo(() => `${jobs.length} jobs found for "${query}"`, [jobs, query])
 
   const isCitySearch = PAK_CITIES.includes(location)
@@ -91,41 +96,51 @@ function Jobs() {
     setShowSuggestions(false)
   }
 
-  const search = async () => {
+  const fetchJobsPage = async (pageNumber = 1, { replace = true } = {}) => {
     setLoading(true)
     setError('')
-    setJobs([])
     setSalaryCard(null)
     setSalaryData(null)
-    setStreamingCount(0)
-    setStreamElapsed(0)
     const selectedRemote = remoteOnly || location === 'Remote'
-    const isLocalBackend = API_BASE_URL === 'http://localhost:8000' || API_BASE_URL === 'http://127.0.0.1:8000'
-    const API_BASE = import.meta.env.DEV && isLocalBackend ? '/api' : (API_BASE_URL || '/api').replace(/\/$/, '')
     const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
-    const token = getStoredAuthToken()
-    const url = `${API_BASE}/jobs/search/stream?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}&city=${encodeURIComponent(cityParam)}&remote_only=${selectedRemote}&pakistan_only=${pakistanOnly}&country_code=${countryMap[location] || 'pk'}${token ? `&token=${encodeURIComponent(token)}` : ''}`
 
     try {
-      searchStream.start(url)
-      setLoading(true)
+      const response = await jobsAPI.search({
+        query,
+        location,
+        city: cityParam,
+        remote_only: selectedRemote,
+        pakistan_only: pakistanOnly,
+        country_code: countryMap[location] || 'pk',
+        page: pageNumber,
+        limit: PAGE_SIZE,
+      })
+      const incoming = response.data || []
+      setHasMore(incoming.length === PAGE_SIZE)
+      setPage(pageNumber)
+      setJobs((current) => (replace || pageNumber === 1 ? incoming : [...current, ...incoming]))
     } catch (e) {
       console.error('Search error:', e)
       setError('Could not fetch jobs. Please try again.')
       setJobs([])
-      setLoading(false)
+      setHasMore(false)
     }
+    setLoading(false)
   }
 
-  useEffect(() => {
-    const unsub = searchStream.subscribe((s) => {
-      setJobs(s.jobs || [])
-      setStreamingCount(s.streamingCount || 0)
-      setStreamElapsed(s.streamElapsed || 0)
-      setLoading(Boolean(s.loading))
-    })
-    return () => { unsub() }
-  }, [])
+  const search = async () => {
+    await fetchJobsPage(1, { replace: true })
+  }
+
+  const loadMore = async () => {
+    if (!hasMore || loading) return
+    await fetchJobsPage(page + 1, { replace: false })
+  }
+
+  const previousPage = async () => {
+    if (page <= 1 || loading) return
+    await fetchJobsPage(page - 1, { replace: true })
+  }
 
   const saveToTracker = async (job) => {
     const created = await applicationsAPI.create({
@@ -208,6 +223,24 @@ function Jobs() {
     }
   }
 
+  const openResumeBuilder = async (job) => {
+    try {
+      let jobRecord = job
+      if (!jobRecord?.id) {
+        const upsert = await jobsAPI.upsert(job)
+        const jobId = upsert.data?.id || upsert.data?.job_id || null
+        if (jobId) {
+          jobRecord = { ...job, id: jobId }
+        }
+      }
+      setResumeModalJob(jobRecord)
+      setResumeModalOpen(true)
+    } catch (e) {
+      console.error('Failed to prepare resume builder', e)
+      alert('Could not prepare the resume builder for this job yet.')
+    }
+  }
+
   const sourceBadge = (source) => {
     if (source === 'adzuna') return 'adzuna'
     if (source === 'jobicy') return 'jobicy'
@@ -215,17 +248,98 @@ function Jobs() {
     return String(source || 'remote')
   }
 
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const res = await profileAPI.list(1, 10)
-        if (mounted) setProfileExists(Boolean(res.data?.exists || (res.data?.selected_profile_id !== null)))
-      } catch (e) {
-        if (mounted) setProfileExists(false)
+  const parseCompleteness = (value) => {
+    const num = Number(value)
+    if (Number.isFinite(num)) return Math.max(0, Math.min(100, Math.round(num)))
+    return null
+  }
+
+  const deriveCompletenessFromProfile = (profile) => {
+    if (!profile || typeof profile !== 'object') return 0
+
+    const explicit = parseCompleteness(profile.profile_completeness)
+    if (explicit !== null) return explicit
+
+    // Fallback heuristic if API omits profile_completeness in selected payload.
+    let score = 0
+    if (String(profile.full_name || '').trim()) score += 10
+    if (String(profile.email || '').trim()) score += 10
+    if (String(profile.phone || '').trim()) score += 10
+    if (String(profile.location || '').trim()) score += 10
+    if (String(profile.summary || '').trim()) score += 15
+    if (Array.isArray(profile.skills) && profile.skills.length > 0) score += 15
+    if (Array.isArray(profile.work_experience) && profile.work_experience.length > 0) score += 15
+    if (Array.isArray(profile.education) && profile.education.length > 0) score += 15
+    return Math.min(100, score)
+  }
+
+  const refreshProfileStatus = async () => {
+    try {
+      let selectedProfile = null
+      let selectedProfileId = null
+
+      const authHeader = (() => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('jobsync_access_token') : ''
+        return token ? { Authorization: `Bearer ${token}` } : {}
+      })()
+
+      const getJson = async (url) => {
+        const response = await fetch(url, { headers: authHeader, credentials: 'include' })
+        if (!response.ok) throw new Error(`Request failed: ${response.status}`)
+        return response.json()
       }
-    })()
-    return () => { mounted = false }
+
+      try {
+        const selectedResponse = await getJson('/api/profile/selected')
+        selectedProfile = selectedResponse?.profile || null
+        selectedProfileId = selectedResponse?.selected_profile_id ?? selectedProfile?.id ?? null
+      } catch {
+        selectedProfile = null
+        selectedProfileId = null
+      }
+
+      const listResponse = await getJson('/api/profile?page=1&per_page=50')
+      const profiles = Array.isArray(listResponse?.profiles) ? listResponse.profiles : []
+      const listSelectedId = listResponse?.selected_profile_id ?? null
+      const effectiveSelectedId = selectedProfileId ?? listSelectedId
+
+      const selectedFromList = profiles.find((item) => item?.id === effectiveSelectedId) || null
+      const completeness =
+        parseCompleteness(selectedFromList?.profile_completeness) ??
+        deriveCompletenessFromProfile(selectedProfile)
+
+      setProfileCompleteness(completeness)
+
+      const isCompleteByFlag = Boolean(selectedProfile?.is_complete || selectedFromList?.is_complete)
+      const hasSelectedProfile = Boolean(effectiveSelectedId)
+      const isCompleteByScore = completeness >= PROFILE_COMPLETENESS_THRESHOLD
+
+      setProfileExists(Boolean(hasSelectedProfile && (isCompleteByFlag || isCompleteByScore)))
+    } catch {
+      setProfileExists(false)
+      setProfileCompleteness(0)
+    }
+  }
+
+  useEffect(() => {
+    void refreshProfileStatus()
+    const onFocus = () => {
+      void refreshProfileStatus()
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onFocus)
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onFocus)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    void fetchJobsPage(1, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -285,15 +399,16 @@ function Jobs() {
 
       {error && <p className="status-message error">{error}</p>}
       {!profileExists && <p className="status-message warning">⚠️ Please complete your profile first — Match Me and Resume will prompt you to finish it.</p>}
+      {profileExists && <p className="status-message success">Profile ready ({profileCompleteness}% complete). Job search, Match Me, and Tailor Resume are enabled.</p>}
       {toast && <p className="status-message success">{toast}</p>}
       
       {!loading && jobs.length > 0 && <p className="results-count">{resultText}</p>}
       
       {loading && (
         <div className="search-loader">
-          <div className="loader-text">Streaming results: {streamingCount} so far · {streamElapsed}s elapsed</div>
+          <div className="loader-text">Loading page {page} of job results...</div>
           <div className="loader-bar-wrap">
-            <div className="loader-bar" style={{ width: streamingCount > 0 ? Math.min(100, streamingCount * 6) + '%' : '30%' }} />
+            <div className="loader-bar" style={{ width: '70%' }} />
           </div>
         </div>
       )}
@@ -339,6 +454,7 @@ function Jobs() {
                   openMatch(job)
                 }}
                 className="action-btn"
+                disabled={!profileExists}
                 title={profileExists ? 'Match your profile to this job' : 'Complete your profile to use Match Me'}
               >
                 Match Me
@@ -353,9 +469,25 @@ function Jobs() {
                   navigate('/resume', { state: { tab: 'rewrite', jobDescription: job.description } })
                 }}
                 className="action-btn"
+                disabled={!profileExists}
                 title={profileExists ? 'Rewrite your resume for this job' : 'Complete your profile to use Resume'}
               >
                 Resume
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!profileExists) {
+                    alert('Please complete your profile first')
+                    return
+                  }
+                  openResumeBuilder(job)
+                }}
+                className="action-btn"
+                disabled={!profileExists}
+                title={profileExists ? 'Generate a tailored resume for this job' : 'Complete your profile to use Tailor Resume'}
+              >
+                Tailor Resume
               </button>
               <button type="button" onClick={() => openSalary(job, index)} className="action-btn">$ Est.</button>
               <button type="button" onClick={() => saveToTracker(job)} className="action-save">Save</button>
@@ -370,6 +502,11 @@ function Jobs() {
             )}
           </article>
         ))}
+      </div>
+
+      <div className="modal-actions" style={{ marginTop: 16 }}>
+        <Button variant="secondary" disabled={page <= 1 || loading} onClick={previousPage}>Previous</Button>
+        <Button variant="secondary" disabled={!hasMore || loading} onClick={loadMore}>Load More</Button>
       </div>
 
       {matchModalOpen && (
@@ -419,6 +556,15 @@ function Jobs() {
           </div>
         </div>
       )}
+
+      <ResumeModal
+        open={resumeModalOpen}
+        job={resumeModalJob}
+        onClose={() => {
+          setResumeModalOpen(false)
+          setResumeModalJob(null)
+        }}
+      />
     </div>
   )
 }

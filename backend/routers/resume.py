@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import ResumeVersion, UserPreference, UserProfile
 from backend.security import get_current_user
+from backend.services.profile_data import parse_string_list
 from backend.schemas import (
     ResumeAnalysis,
     ResumeReanalysisRequest,
@@ -19,6 +20,7 @@ from backend.schemas import (
     ResumeVersionUpdateUsedFor,
 )
 from backend.services.pdf_parser import extract_text_from_pdf
+from core.resume_analyzer import _extract_keywords
 from core.llm_provider import LLMProvider
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
@@ -27,6 +29,49 @@ _STOP_WORDS = {
     "were", "have", "has", "had", "will", "can", "not", "but", "our", "their", "they",
     "them", "its", "into", "about", "role", "job", "work", "using", "use", "used",
     "over", "under", "than", "then", "also", "while", "where", "when", "which",
+}
+
+_SECTION_ALIASES = {
+    "summary": "Summary",
+    "professional summary": "Summary",
+    "profile": "Summary",
+    "core skills": "Skills",
+    "skills": "Skills",
+    "technical skills": "Skills",
+    "experience": "Experience",
+    "professional experience": "Experience",
+    "work experience": "Experience",
+    "education": "Education",
+    "academic background": "Education",
+    "projects": "Projects",
+    "project experience": "Projects",
+    "contact": "Contact",
+}
+
+_SKILL_OVERRIDES = {
+    "sql": "SQL",
+    "aws": "AWS",
+    "gcp": "GCP",
+    "git": "Git",
+    "github": "GitHub",
+    "fastapi": "FastAPI",
+    "flask": "Flask",
+    "django": "Django",
+    "react": "React",
+    "typescript": "TypeScript",
+    "javascript": "JavaScript",
+    "node.js": "Node.js",
+    "data analysis": "Data Analysis",
+    "machine learning": "Machine Learning",
+    "deep learning": "Deep Learning",
+    "power bi": "Power BI",
+    "tableau": "Tableau",
+    "rest api": "REST API",
+    "rest apis": "REST API",
+    "ci/cd": "CI/CD",
+    "system design": "System Design",
+    "problem solving": "Problem Solving",
+    "communication": "Communication",
 }
 
 
@@ -142,13 +187,66 @@ def _parse_profile_fields(text: str) -> dict[str, str]:
 
 
 def _top_job_keywords(job_description: str, limit: int = 10) -> list[str]:
-    token_counts: dict[str, int] = {}
-    for token in re.findall(r"[A-Za-z][A-Za-z0-9+.#-]{2,}", (job_description or "").lower()):
-        if token in _STOP_WORDS:
+    return [keyword for keyword in _extract_keywords(job_description or "")[:limit] if keyword]
+
+
+def _pretty_skill_name(value: str) -> str:
+    normalized = re.sub(r"\s+", " ", (value or "").strip())
+    if not normalized:
+        return ""
+    lookup = normalized.lower()
+    if lookup in _SKILL_OVERRIDES:
+        return _SKILL_OVERRIDES[lookup]
+    if lookup.isupper():
+        return lookup
+    if len(normalized) <= 3 and normalized.isalpha():
+        return normalized.upper()
+    if "/" in normalized or "." in normalized:
+        return normalized
+    return " ".join(part.capitalize() for part in normalized.split())
+
+
+def _split_skills(value: str) -> list[str]:
+    return [part.strip() for part in re.split(r"[,;|•]", value or "") if part.strip()]
+
+
+def _parse_resume_sections(text: str) -> dict[str, list[str]]:
+    sections: dict[str, list[str]] = {"Summary": [], "Skills": [], "Experience": [], "Education": [], "Projects": []}
+    current = "Summary"
+    for raw_line in (text or "").replace("\r\n", "\n").splitlines():
+        line = raw_line.strip()
+        if not line:
             continue
-        token_counts[token] = token_counts.get(token, 0) + 1
-    ranked = sorted(token_counts.items(), key=lambda item: (-item[1], item[0]))
-    return [token for token, _ in ranked[:limit]]
+        normalized = re.sub(r"[:\-]+$", "", line).strip().lower()
+        heading = _SECTION_ALIASES.get(normalized)
+        if heading is None and re.fullmatch(r"[A-Z][A-Z\s/&-]{2,}", line) and len(line.split()) <= 4:
+            heading = _SECTION_ALIASES.get(line.lower())
+        if heading:
+            current = heading
+            continue
+        sections.setdefault(current, []).append(line)
+    return sections
+
+
+def _rewrite_bullet_line(line: str, keywords: list[str]) -> str:
+    text = line.strip().lstrip("-• ")
+    for weak, strong in (
+        ("responsible for", "achieved"),
+        ("helped with", "delivered"),
+        ("worked on", "built"),
+        ("assisted with", "supported"),
+        ("tasked with", "owned"),
+        ("involved in", "contributed to"),
+        ("used to", "optimized"),
+    ):
+        text = re.sub(re.escape(weak), strong, text, flags=re.IGNORECASE)
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
+    if keywords:
+        aligned = ", ".join(keywords[:2])
+        if aligned and aligned.lower() not in text.lower() and len(text) < 160:
+            text = text.rstrip(".") + f" with focus on {aligned}."
+    return f"- {text}" if text else line
 
 
 def _is_placeholder_rewrite(text: str) -> bool:
@@ -167,14 +265,33 @@ def _is_placeholder_rewrite(text: str) -> bool:
 
 
 def _build_resume_fallback(source_resume_text: str, job_description: str, job_type: str) -> str:
+    sections = _parse_resume_sections(source_resume_text)
     profile = _parse_profile_fields(source_resume_text)
-    source_skills = [s.strip() for s in profile["skills"].split(",") if s.strip()]
-    jd_keywords = _top_job_keywords(job_description, limit=8)
+    jd_keywords = [_pretty_skill_name(item) for item in _top_job_keywords(job_description, limit=8)]
+
+    summary_lines = sections.get("Summary") or []
+    summary = " ".join(summary_lines).strip()
+    if not summary:
+        years = profile["years_experience"] or "2"
+        job_focus = (job_type or "general").strip().lower() or "general"
+        if job_description.strip():
+            summary = (
+                f"Backend engineer with {years} years of experience building APIs and data workflows. "
+                f"Focused on clean implementation, reliable delivery, and collaborative execution for {job_focus} work."
+            )
+        else:
+            summary = "Not specified"
+
+    source_skills = [
+        _pretty_skill_name(item)
+        for item in _split_skills(", ".join(sections.get("Skills") or []))
+        if _pretty_skill_name(item)
+    ]
 
     merged_skills: list[str] = []
     seen_skills: set[str] = set()
-    for skill in source_skills + jd_keywords:
-        normalized = skill.strip()
+    for skill in source_skills + jd_keywords + ["Python", "SQL", "Problem Solving", "Communication"]:
+        normalized = _pretty_skill_name(skill)
         if not normalized:
             continue
         normalized_key = normalized.lower()
@@ -183,37 +300,27 @@ def _build_resume_fallback(source_resume_text: str, job_description: str, job_ty
         seen_skills.add(normalized_key)
         merged_skills.append(normalized)
 
-    years = profile["years_experience"] or "0"
-    degree = profile["degree"] or "Not specified"
-    interests = profile["interests"] or "Continuous learning and technical growth"
-
-    summary = (
-        f"Early-career {job_type} candidate with {years} years of professional experience and a strong engineering "
-        "foundation. Focused on structured problem solving, fast learning, and delivering reliable AI-enabled solutions."
-    )
-
-    strengths = [
-        "Translate ambiguous requirements into practical implementation plans.",
-        "Build and iterate clean, maintainable solutions with strong ownership.",
-        "Collaborate effectively with cross-functional teams and communicate clearly.",
+    experience_lines = sections.get("Experience") or ["- Not specified"]
+    experience = [
+        _rewrite_bullet_line(line, jd_keywords) if line.lstrip().startswith(("-", "•")) else line.strip()
+        for line in experience_lines
+        if line.strip()
     ]
-    if jd_keywords:
-        strengths.append(f"Actively developing depth in: {', '.join(jd_keywords[:5])}.")
+
+    education = sections.get("Education") or ["- Not specified"]
+    projects = sections.get("Projects") or ["- Not specified"]
 
     return (
         "PROFESSIONAL SUMMARY\n"
         f"{summary}\n\n"
         "CORE SKILLS\n"
-        f"- {', '.join(merged_skills[:12]) if merged_skills else 'Python, Problem Solving, Communication'}\n\n"
-        "RELEVANT STRENGTHS\n"
-        + "\n".join(f"- {item}" for item in strengths)
+        f"- {', '.join(merged_skills[:10]) if merged_skills else 'Python, SQL, Problem Solving, Communication'}\n\n"
+        "EXPERIENCE\n"
+        + "\n".join(experience)
         + "\n\nEDUCATION\n"
-        f"- {degree}\n\n"
-        "EXPERIENCE SNAPSHOT\n"
-        f"- Professional experience: {years} years\n"
-        "- Prepared to contribute in AI/ML implementation, team collaboration, and iterative delivery.\n\n"
-        "INTERESTS\n"
-        f"- {interests}"
+        + "\n".join(education)
+        + "\n\nPROJECTS\n"
+        + "\n".join(projects)
     )
 
 
@@ -284,7 +391,7 @@ Respond in JSON format: {{"score": number, "matched_skills": ["..."], "keywords"
         db.add(profile)
 
     profile.resume_text = text
-    profile.skills = ", ".join(keywords) if keywords else ""
+    profile.skills = parse_string_list(keywords) if keywords else []
     profile.latest_ats_score = score
     db.commit()
 
@@ -336,7 +443,8 @@ Return exactly this JSON schema:
     tips = parsed.get("tips", []) or []
 
     profile.latest_ats_score = score
-    profile.skills = ", ".join(matched_skills) if matched_skills else profile.skills
+    if matched_skills:
+        profile.skills = parse_string_list(matched_skills)
     db.commit()
 
     return ResumeAnalysis(
@@ -382,6 +490,8 @@ Return JSON only:
         rewritten = ""
     if not rewritten:
         rewritten = _normalize_rewritten_text(raw_response)
+    if rewritten.lower().startswith("ai error:"):
+        rewritten = ""
     rewritten, nested_payload = _unwrap_nested_rewrite_payload(rewritten)
     if not rewritten:
         fallback_reason = fallback_reason or "AI returned an empty response; generated a structured rewrite from your profile and job description."

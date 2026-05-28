@@ -12,10 +12,10 @@ logger = logging.getLogger("scrape_rozee")
 def main(limit: int | None = None):
     db = SessionLocal()
     try:
-        from scrapers.rozee_scraper import run_sample, run
+        from scrapers.rozee_scraper import run
         if limit:
-            logger.info("Running rozee sample run (limit=%s)", limit)
-            results = run_sample(db)
+            logger.info("Running rozee run with limit=%s", limit)
+            results = run(db, max_results=limit)
         else:
             logger.info("Running full rozee run")
             results = run(db)

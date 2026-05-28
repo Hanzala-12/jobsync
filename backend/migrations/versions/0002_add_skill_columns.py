@@ -6,6 +6,7 @@ Create Date: 2026-05-21 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = 'add_skill_columns'
@@ -15,10 +16,18 @@ depends_on = None
 
 
 def upgrade():
-    op.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS job_skills JSON DEFAULT '[]'")
-    op.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS profile_skills JSON DEFAULT '[]'")
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    if "job_skills" not in {col["name"] for col in inspector.get_columns("jobs")}:
+        op.add_column("jobs", sa.Column("job_skills", sa.JSON(), nullable=False, server_default=sa.text("'[]'")))
+    if "profile_skills" not in {col["name"] for col in inspector.get_columns("student_profiles")}:
+        op.add_column("student_profiles", sa.Column("profile_skills", sa.JSON(), nullable=False, server_default=sa.text("'[]'")))
 
 
 def downgrade():
-    op.execute("ALTER TABLE jobs DROP COLUMN IF EXISTS job_skills")
-    op.execute("ALTER TABLE student_profiles DROP COLUMN IF EXISTS profile_skills")
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    if "job_skills" in {col["name"] for col in inspector.get_columns("jobs")}:
+        op.drop_column("jobs", "job_skills")
+    if "profile_skills" in {col["name"] for col in inspector.get_columns("student_profiles")}:
+        op.drop_column("student_profiles", "profile_skills")

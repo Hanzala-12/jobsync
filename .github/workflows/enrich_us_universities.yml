@@ -1,0 +1,30 @@
+name: Enrich US Universities
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+jobs:
+  enrich-us-universities:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      COLLEGE_SCORECARD_API_KEY: ${{ secrets.COLLEGE_SCORECARD_API_KEY }}
+      ENABLE_US_UNIVERSITY_ENRICHMENT: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run migrations
+        run: |
+          alembic upgrade head
+      - name: Enrich US universities
+        run: |
+          python scripts/enrich_us_universities.py --delay-seconds 1.0 --retries 3

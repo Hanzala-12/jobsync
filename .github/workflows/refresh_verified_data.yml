@@ -1,0 +1,33 @@
+name: Refresh Verified University Data
+
+on:
+  schedule:
+    - cron: '15 3 1 * *'
+  workflow_dispatch:
+
+jobs:
+  refresh-verified-data:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SEARXNG_BASE_URL: ${{ secrets.SEARXNG_BASE_URL }}
+      ENABLE_LIVE_VERIFICATION: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run migrations
+        run: |
+          alembic upgrade head
+      - name: Refresh verified data
+        run: |
+          python scripts/refresh_verified_data.py --limit 200
+      - name: Summarize scrape jobs
+        run: |
+          python scripts/summarize_scrapes.py

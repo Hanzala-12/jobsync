@@ -4,6 +4,7 @@ from backend.database import get_db
 from backend.schemas import CoverLetterRequest, CoverLetterResponse
 from backend.models import UserProfile, User
 from backend.security import get_current_user
+from backend.services.profile_data import build_profile_resume_text
 
 router = APIRouter(prefix="/cover-letter", tags=["Cover Letter"])
 
@@ -19,6 +20,8 @@ async def generate_cover_letter(req: CoverLetterRequest, current_user: User = De
     resume_context = ""
     if profile and profile.resume_text:
         resume_context = profile.resume_text[:1500]
+    elif profile:
+        resume_context = build_profile_resume_text(profile)[:1500]
 
     tone = (req.tone or "professional").strip().lower()
     tone_guidance = {

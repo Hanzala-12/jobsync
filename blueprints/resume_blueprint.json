@@ -1,0 +1,70 @@
+{
+  "metadata": {
+    "version": "2026-05-28",
+    "author": "JobSync Pro",
+    "description": "ATS-optimized resume blueprint based on 2026 hiring guidelines"
+  },
+  "sections": [
+    {
+      "name": "contact",
+      "title": "Contact Information",
+      "mandatory": true,
+      "order": 1,
+      "fields": [
+        "full_name", "job_title", "email", "phone", "location",
+        "linkedin_url", "portfolio_url"
+      ],
+      "layout_hint": "inline_row"
+    },
+    {
+      "name": "summary",
+      "title": "Professional Summary",
+      "mandatory": true,
+      "order": 2,
+      "style_hint": "paragraph",
+      "max_length": 150
+    },
+    {
+      "name": "skills",
+      "title": "Skills",
+      "mandatory": true,
+      "order": 3,
+      "style_hint": "comma_list"
+    },
+    {
+      "name": "experience",
+      "title": "Work Experience",
+      "mandatory": true,
+      "order": 4,
+      "entry_template": {
+        "title": "{job_title}",
+        "company": "{company}",
+        "dates": "{start_date} – {end_date or 'Present'}",
+        "bullets": []
+      }
+    },
+    {
+      "name": "education",
+      "title": "Education",
+      "mandatory": true,
+      "order": 5,
+      "entry_template": {
+        "degree": "{degree}",
+        "institution": "{institution}",
+        "dates": "{start_year} – {end_year}",
+        "gpa": "{gpa}"
+      }
+    },
+    {
+      "name": "projects",
+      "title": "Projects",
+      "mandatory": false,
+      "order": 6,
+      "entry_template": {
+        "name": "{name}",
+        "description": "{description}",
+        "technologies": "{technologies}"
+      }
+    }
+  ]
+}

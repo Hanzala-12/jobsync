@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import Button from '../components/Button'
 import { profileAPI, resumeAPI } from '../api/client'
 import { UploadCloud, FileText, Download, Copy, Trash2, CheckCircle2, AlertCircle } from 'lucide-react'
+import ResumeModal from '../components/ResumeModal'
 import './Resume.css'
 
 const TABS = ['analyze', 'rewrite', 'versions']
@@ -28,6 +29,8 @@ function Resume() {
   const [versionName, setVersionName] = useState('')
   const [savingVersion, setSavingVersion] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewJob, setPreviewJob] = useState(null)
 
   useEffect(() => {
     if (location.state?.tab && TABS.includes(location.state.tab)) {
@@ -149,6 +152,28 @@ function Resume() {
     link.download = name
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const openPreview = () => {
+    if (!rewriteResult?.rewritten) return
+    setPreviewJob({
+      title: `${jobType} Resume Preview`,
+      company: 'Standalone Resume Builder',
+      location: 'Local Preview',
+      previewResult: {
+        candidate_name: 'Tailored Resume',
+        tagline: `${jobType} optimization from the standalone resume page`,
+        original_resume: resumeText,
+        fixed_resume_text: rewriteResult.rewritten,
+        simple_text_version: rewriteResult.rewritten,
+        ats_score: score || 0,
+        changes_made: rewriteResult.changes_made || [],
+        validation_passed: true,
+        validation_message: 'Preview generated from the standalone rewrite flow.',
+        cached: false,
+      },
+    })
+    setPreviewOpen(true)
   }
 
   const scoreClass = score < 50 ? 'bad' : score < 76 ? 'ok' : 'good'
@@ -298,6 +323,7 @@ function Resume() {
                 <div className="action-row">
                   <Button variant="secondary" onClick={() => copyText(rewriteResult.rewritten)}><Copy size={14} style={{ marginRight: 6 }}/> Copy text</Button>
                   <Button variant="secondary" onClick={() => downloadText(rewriteResult.rewritten, 'optimized-resume.txt')}><Download size={14} style={{ marginRight: 6 }}/> Download .txt</Button>
+                  <Button variant="secondary" onClick={openPreview}>Open ATS Preview</Button>
                   <Button onClick={() => setShowSaveModal(true)}>Save Version</Button>
                 </div>
               </div>
@@ -376,6 +402,15 @@ function Resume() {
           </div>
         </div>
       )}
+
+      <ResumeModal
+        open={previewOpen}
+        job={previewJob}
+        onClose={() => {
+          setPreviewOpen(false)
+          setPreviewJob(null)
+        }}
+      />
     </div>
   )
 }

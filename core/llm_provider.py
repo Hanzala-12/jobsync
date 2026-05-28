@@ -209,8 +209,9 @@ class LLMProvider:
                 last_error = exc
                 logger.warning("LLM provider %s failed; trying next backend", backend.provider)
         if last_error is not None:
-            return f"AI error: {str(last_error)}"
-        return "AI error: No valid API key configured"
+            logger.warning("All LLM backends failed; falling back to local resume generation.")
+            return ""
+        return ""
 
     @retry(
         stop=stop_after_attempt(5),

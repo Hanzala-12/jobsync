@@ -17,10 +17,44 @@ from backend.models import Program, University
 
 
 API_URL = "http://universities.hipolabs.com/search"
+EUROPE_COUNTRIES = [
+    "Austria",
+    "Belgium",
+    "Bulgaria",
+    "Croatia",
+    "Cyprus",
+    "Czech Republic",
+    "Denmark",
+    "Estonia",
+    "Finland",
+    "France",
+    "Germany",
+    "Greece",
+    "Hungary",
+    "Iceland",
+    "Ireland",
+    "Italy",
+    "Latvia",
+    "Lithuania",
+    "Luxembourg",
+    "Malta",
+    "Netherlands",
+    "Norway",
+    "Poland",
+    "Portugal",
+    "Romania",
+    "Serbia",
+    "Slovakia",
+    "Slovenia",
+    "Spain",
+    "Sweden",
+    "Switzerland",
+    "United Kingdom",
+]
 PROGRAM_TEMPLATES = [
-    {"name": "MSc Computer Science", "degree_level": "masters", "duration_years": 2, "estimated_tuition_fees": 30000, "currency": "USD", "min_gpa": 3.0},
-    {"name": "MSc Data Science", "degree_level": "masters", "duration_years": 2, "estimated_tuition_fees": 32000, "currency": "USD", "min_gpa": 3.1},
-    {"name": "MBA", "degree_level": "masters", "duration_years": 2, "estimated_tuition_fees": 28000, "currency": "USD", "min_gpa": 2.8},
+    {"name": "MSc Computer Science", "degree_level": "masters", "duration_years": 2, "estimated_tuition_fees": 30000, "currency": "USD", "tuition_period": "year", "min_gpa": 3.0, "min_gre": None},
+    {"name": "MSc Data Science", "degree_level": "masters", "duration_years": 2, "estimated_tuition_fees": 32000, "currency": "USD", "tuition_period": "year", "min_gpa": 3.1, "min_gre": None},
+    {"name": "MBA", "degree_level": "masters", "duration_years": 2, "estimated_tuition_fees": 28000, "currency": "USD", "tuition_period": "year", "min_gpa": 2.8, "min_gre": None},
 ]
 
 
@@ -44,6 +78,15 @@ def _coerce_population(index: int) -> int:
     return 10000 + (index * 750)
 
 
+def _fetch_universities_for_country(country: str) -> List[Dict[str, Any]]:
+    response = requests.get(API_URL, params={"country": country}, timeout=30)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, list):
+        return []
+    return payload
+
+
 def _mock_program_payload(index: int, university: University) -> List[Dict[str, Any]]:
     programs: List[Dict[str, Any]] = []
     for template_index, template in enumerate(PROGRAM_TEMPLATES):
@@ -55,7 +98,9 @@ def _mock_program_payload(index: int, university: University) -> List[Dict[str, 
                 "duration_years": template["duration_years"],
                 "estimated_tuition_fees": template["estimated_tuition_fees"] + tuition_offset,
                 "currency": template["currency"],
+                "tuition_period": template.get("tuition_period") or "year",
                 "min_gpa": template["min_gpa"],
+                "min_gre": template.get("min_gre"),
                 "document_text": (
                     f"University: {university.name}\n"
                     f"Country: {university.country}\n"
@@ -63,7 +108,7 @@ def _mock_program_payload(index: int, university: University) -> List[Dict[str, 
                     f"Program: {template['name']}\n"
                     f"Degree level: {template['degree_level']}\n"
                     f"Duration years: {template['duration_years']}\n"
-                    f"Estimated tuition fees: {template['estimated_tuition_fees'] + tuition_offset} {template['currency']}\n"
+                    f"Estimated tuition fees: {template['estimated_tuition_fees'] + tuition_offset} {template['currency']} per {template.get('tuition_period') or 'year'}\n"
                     f"Minimum GPA: {template['min_gpa']}"
                 ),
             }
@@ -117,7 +162,7 @@ def _upsert_program(db, university: University, payload: Dict[str, Any]) -> Prog
         .first()
     )
     if not program:
-        program = Program(university_id=university.id, **{k: payload[k] for k in ["name", "degree_level", "duration_years", "estimated_tuition_fees", "currency", "min_gpa"]})
+        program = Program(university_id=university.id, **{k: payload[k] for k in ["name", "degree_level", "duration_years", "estimated_tuition_fees", "currency", "tuition_period", "min_gpa", "min_gre"] if k in payload})
         db.add(program)
         db.flush()
         return program
@@ -125,7 +170,9 @@ def _upsert_program(db, university: University, payload: Dict[str, Any]) -> Prog
     program.duration_years = payload["duration_years"]
     program.estimated_tuition_fees = payload["estimated_tuition_fees"]
     program.currency = payload["currency"]
+    program.tuition_period = payload.get("tuition_period") or program.tuition_period
     program.min_gpa = payload["min_gpa"]
+    program.min_gre = payload.get("min_gre")
     return program
 
 
@@ -184,13 +231,43 @@ def ingest_universities(limit: int = 25, country: Optional[str] = None) -> None:
         db.close()
 
 
-def _run_full_enrichment(limit: int, country: Optional[str]) -> None:
-    from scripts.enrich_universities import run_full_enrichment
+def _run_live_refresh(limit: int, country: Optional[str]) -> None:
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        countries = [country] if country else EUROPE_COUNTRIES
+        processed = 0
+        for source_country in countries:
+            country_processed = 0
+            try:
+                payload = _fetch_universities_for_country(source_country)
+            except Exception:
+                continue
 
-    results = run_full_enrichment(limit=limit, country=country)
-    print("Full enrichment results:")
-    for key, value in results.items():
-        print(f"- {key}: {value}")
+            for item in payload:
+                university = _upsert_university(db, item, processed)
+                db.flush()
+
+                for program_payload in _mock_program_payload(processed, university):
+                    program = _upsert_program(db, university, program_payload)
+                    db.flush()
+                    _index_program_into_chroma(university, program, program_payload["document_text"])
+
+                processed += 1
+                country_processed += 1
+                if processed >= limit:
+                    break
+            db.commit()
+            print(f"- {source_country}: {country_processed}")
+            if processed >= limit:
+                break
+
+        results = {"europe_live_api": processed}
+        print("Live refresh results:")
+        for key, value in results.items():
+            print(f"- {key}: {value}")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
@@ -200,6 +277,8 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=25, help="Limit the number of universities to ingest")
     args = parser.parse_args()
 
-    ingest_universities(limit=args.limit, country=args.country)
     if args.full:
-        _run_full_enrichment(limit=args.limit, country=args.country)
+        # Prefer the current live Europe-first refresh so the catalog stays fresh and focused.
+        _run_live_refresh(limit=max(args.limit, 1000), country=args.country)
+    else:
+        ingest_universities(limit=args.limit, country=args.country)

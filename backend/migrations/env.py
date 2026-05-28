@@ -11,7 +11,7 @@ from sqlalchemy import pool
 from alembic import context
 from backend.database import Base, DATABASE_URL
 # Import all models to register them on Base.metadata
-from backend.models import UserProfile, Job, Application, ResumeVersion, PrefetchedJob, University, Program, StudentProfile, UniversityMatchCache, StudentProgramMatch, SavedProgram, StudyApplication
+import backend.models  # register remaining models on Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

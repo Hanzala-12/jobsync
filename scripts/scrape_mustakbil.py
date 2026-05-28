@@ -11,9 +11,9 @@ logger = logging.getLogger("scrape_mustakbil")
 def main(limit: int | None = None):
     db = SessionLocal()
     try:
-        from scrapers.mustakbil_scraper import run, run_sample
+        from scrapers.mustakbil_scraper import run
         if limit:
-            results = run_sample(db)
+            results = run(db, max_results=limit)
         else:
             results = run(db)
         logger.info("Mustakbil: inserted/updated %d items", len(results))

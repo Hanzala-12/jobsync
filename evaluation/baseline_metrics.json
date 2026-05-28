@@ -1,0 +1,26 @@
+{
+  "dataset_path": "data\\labeled_resume_jd_pairs.csv",
+  "num_queries": 10,
+  "num_pairs": 200,
+  "candidate_pool_size": 20,
+  "enable_cross_encoder": false,
+  "dense_backend": "tfidf-fallback",
+  "pipeline": "bm25_bi_encoder",
+  "stages": {
+    "bm25": {
+      "ndcg_at_5": 0.8801296694262364,
+      "mrr": 1.0,
+      "precision_at_5": 0.72
+    },
+    "bm25_bi_encoder": {
+      "ndcg_at_5": 0.9012696296823386,
+      "mrr": 1.0,
+      "precision_at_5": 0.72
+    }
+  },
+  "final_metrics": {
+    "ndcg_at_5": 0.9012696296823386,
+    "mrr": 1.0,
+    "precision_at_5": 0.72
+  }
+}

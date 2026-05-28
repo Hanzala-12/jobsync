@@ -8,7 +8,13 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
+
+try:
+    from sentence_transformers import SentenceTransformer
+    _HAS_SENTENCE_TRANSFORMERS = True
+except Exception:  # pragma: no cover - optional dependency fallback
+    SentenceTransformer = None  # type: ignore[assignment]
+    _HAS_SENTENCE_TRANSFORMERS = False
 
 import chromadb
 from core.llm_provider import LLMProvider, is_fallback_mode_enabled
@@ -19,8 +25,19 @@ DEFAULT_CHROMA_DIR = os.getenv("CHROMA_PERSIST_DIR") or os.getenv("CHROMA_DB_DIR
 DEFAULT_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "jobfit_docs")
 DEFAULT_OUTPUT_DIR = os.path.join(os.getcwd(), "outputs", "cover_letters")
 DEFAULT_EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+DEFAULT_FINETUNED_MODEL_PATH = os.getenv("FINETUNED_EMBEDDING_MODEL_PATH", os.path.join(os.getcwd(), "models", "finetuned-embeddings"))
 DEFAULT_OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 DEFAULT_OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "gpt-4o-mini")
+ENABLE_FINETUNED_EMBEDDINGS = (os.getenv("ENABLE_FINETUNED_EMBEDDINGS", "false").strip().lower() in {"1", "true", "yes", "on"})
+ENABLE_HYBRID_SEARCH = (os.getenv("ENABLE_HYBRID_SEARCH", "false").strip().lower() in {"1", "true", "yes", "on"})
+HYBRID_VECTOR_WEIGHT = float(os.getenv("HYBRID_VECTOR_WEIGHT", "0.5") or 0.5)
+HYBRID_BM25_WEIGHT = float(os.getenv("HYBRID_BM25_WEIGHT", "0.5") or 0.5)
+HYBRID_CANDIDATE_LIMIT = max(10, int(os.getenv("HYBRID_CANDIDATE_LIMIT", "200") or 200))
+
+try:
+    from rank_bm25 import BM25Okapi
+except Exception:  # pragma: no cover - optional dependency fallback
+    BM25Okapi = None
 
 _embedding_model: SentenceTransformer | None = None
 _chroma_client: chromadb.PersistentClient | None = None
@@ -43,8 +60,18 @@ def ensure_output_dir(output_dir: str = DEFAULT_OUTPUT_DIR) -> str:
 
 def get_embedding_model() -> SentenceTransformer:
     global _embedding_model
+    if not _HAS_SENTENCE_TRANSFORMERS:
+        raise RuntimeError("sentence_transformers is unavailable in this environment")
     if _embedding_model is None:
-        _embedding_model = SentenceTransformer(DEFAULT_EMBEDDING_MODEL)
+        if ENABLE_FINETUNED_EMBEDDINGS:
+            try:
+                _embedding_model = SentenceTransformer(DEFAULT_FINETUNED_MODEL_PATH)
+                return _embedding_model
+            except Exception:
+                # Fall back to the previously working baseline model.
+                _embedding_model = SentenceTransformer(DEFAULT_EMBEDDING_MODEL)
+        else:
+            _embedding_model = SentenceTransformer(DEFAULT_EMBEDDING_MODEL)
     return _embedding_model
 
 
@@ -97,18 +124,72 @@ def _query_collection_with_embedding(query_embedding: List[float], k: int, where
     return chunks
 
 
-def retrieve_relevant_chunks(job_text: str, k: int = 5, where: Optional[Dict[str, Any]] = None) -> List[RetrievedChunk]:
+def _normalize_scores(values: List[float]) -> List[float]:
+    if not values:
+        return []
+    lo = min(values)
+    hi = max(values)
+    if hi - lo <= 1e-12:
+        return [1.0 for _ in values]
+    return [(value - lo) / (hi - lo) for value in values]
+
+
+def _hybrid_fusion(query_text: str, query_embedding: List[float], k: int, where: Optional[Dict[str, Any]]) -> List[RetrievedChunk]:
+    if BM25Okapi is None:
+        return _query_collection_with_embedding(query_embedding, k, where)
+
+    candidate_size = max(k * 4, HYBRID_CANDIDATE_LIMIT)
+
+    vector_chunks = _query_collection_with_embedding(query_embedding, candidate_size, where)
+    if not vector_chunks:
+        return []
+
+    # BM25 scores are computed on the same candidate set to keep the operation lightweight.
+    docs = [chunk.text for chunk in vector_chunks]
+    tokenized_docs = [doc.lower().split() for doc in docs]
+    bm25 = BM25Okapi(tokenized_docs)
+    query_tokens = query_text.lower().split()
+    bm25_scores_raw = [float(value) for value in bm25.get_scores(query_tokens)]
+
+    vector_scores_raw: List[float] = []
+    for chunk in vector_chunks:
+        distance = float(chunk.distance or 0.0)
+        vector_scores_raw.append(1.0 / (1.0 + max(distance, 0.0)))
+
+    vector_scores = _normalize_scores(vector_scores_raw)
+    bm25_scores = _normalize_scores(bm25_scores_raw)
+
+    fused: List[Tuple[float, RetrievedChunk]] = []
+    for idx, chunk in enumerate(vector_chunks):
+        score = (HYBRID_VECTOR_WEIGHT * vector_scores[idx]) + (HYBRID_BM25_WEIGHT * bm25_scores[idx])
+        fused.append((score, chunk))
+
+    fused.sort(key=lambda item: item[0], reverse=True)
+    return [item[1] for item in fused[:k]]
+
+
+def retrieve_relevant_chunks(job_text: str, k: int = 5, where: Optional[Dict[str, Any]] = None, use_hybrid: bool = True) -> List[RetrievedChunk]:
     embedding_model = get_embedding_model()
     query_embedding = embedding_model.encode([job_text], convert_to_numpy=True)[0].tolist()
+    if ENABLE_HYBRID_SEARCH and use_hybrid:
+        try:
+            return _hybrid_fusion(job_text, query_embedding, k, where)
+        except Exception:
+            return _query_collection_with_embedding(query_embedding, k, where)
     return _query_collection_with_embedding(query_embedding, k, where)
 
 
-async def retrieve_relevant_chunks_async(job_text: str, k: int = 5, where: Optional[Dict[str, Any]] = None) -> List[RetrievedChunk]:
+async def retrieve_relevant_chunks_async(job_text: str, k: int = 5, where: Optional[Dict[str, Any]] = None, use_hybrid: bool = True) -> List[RetrievedChunk]:
     import asyncio
     embedding_model = get_embedding_model()
     loop = asyncio.get_running_loop()
     embs = await loop.run_in_executor(None, lambda: embedding_model.encode([job_text], convert_to_numpy=True))
     query_embedding = embs[0].tolist()
+    if ENABLE_HYBRID_SEARCH and use_hybrid:
+        try:
+            return _hybrid_fusion(job_text, query_embedding, k, where)
+        except Exception:
+            return _query_collection_with_embedding(query_embedding, k, where)
     return _query_collection_with_embedding(query_embedding, k, where)
 
 

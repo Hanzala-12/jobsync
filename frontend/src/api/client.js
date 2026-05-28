@@ -1,9 +1,7 @@
 ﻿import axios from 'axios'
 
 const AUTH_TOKEN_KEY = 'jobsync_access_token'
-const REFRESH_TOKEN_KEY = 'jobsync_refresh_token'
 let authToken = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : ''
-let refreshToken = typeof window !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN_KEY) : ''
 
 function resolveApiBaseUrl() {
   const configured = String(import.meta.env.VITE_API_URL || '').trim()
@@ -23,6 +21,11 @@ function resolveApiBaseUrl() {
 
 export const API_BASE_URL = resolveApiBaseUrl()
 
+function resolveBackendRootUrl() {
+  if (!API_BASE_URL) return ''
+  return API_BASE_URL.replace(/\/api$/, '')
+}
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
 })
@@ -37,31 +40,15 @@ export function setAuthToken(token) {
   }
 }
 
-export function setRefreshToken(token) {
-  refreshToken = token || ''
-  if (typeof window === 'undefined') return
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
-  } else {
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
-  }
-}
-
 export function getStoredAuthToken() {
   if (authToken) return authToken
   if (typeof window === 'undefined') return ''
   return localStorage.getItem(AUTH_TOKEN_KEY) || ''
 }
 
-export function getStoredRefreshToken() {
-  if (refreshToken) return refreshToken
-  if (typeof window === 'undefined') return ''
-  return localStorage.getItem(REFRESH_TOKEN_KEY) || ''
-}
 
 export function clearAuthToken() {
   setAuthToken('')
-  setRefreshToken('')
 }
 
 apiClient.interceptors.request.use((config) => {
@@ -73,6 +60,8 @@ apiClient.interceptors.request.use((config) => {
     config.headers = config.headers || {}
     config.headers.Authorization = `Bearer ${token}`
   }
+  // Ensure cookies (HttpOnly refresh token) are sent for cross-site requests when needed
+  config.withCredentials = true
   return config
 })
 
@@ -102,7 +91,7 @@ export function getApiErrorMessage(error) {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error?.response?.status || 0
     const message = getApiErrorMessage(error)
     const normalized = {
@@ -115,7 +104,24 @@ apiClient.interceptors.response.use(
       error.response.data = normalized
     }
 
-    if (status === 401 && (getStoredAuthToken() || getStoredRefreshToken())) {
+    // Attempt a single refresh on 401 before invalidating auth
+    const originalRequest = error.config
+    if (status === 401 && !originalRequest?._retry) {
+      originalRequest._retry = true
+      try {
+        // Call refresh endpoint which uses HttpOnly cookie
+        const refreshResp = await axios.post(`${API_BASE_URL || ''}/auth/refresh`, {}, { withCredentials: true })
+        const newAccess = refreshResp?.data?.access_token
+        if (newAccess) {
+          setAuthToken(newAccess)
+          originalRequest.headers = originalRequest.headers || {}
+          originalRequest.headers.Authorization = `Bearer ${newAccess}`
+          return apiClient(originalRequest)
+        }
+      } catch (refreshErr) {
+        // Fall through to invalidation
+      }
+
       clearAuthToken()
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('jobsync-auth-invalidated'))
@@ -148,7 +154,8 @@ export const authAPI = {
   login: (payload) => apiClient.post('/auth/login', payload),
   signup: (payload) => apiClient.post('/auth/signup', payload),
   me: () => apiClient.get('/auth/me'),
-  refresh: (refresh_token) => apiClient.post('/auth/refresh', { refresh_token }),
+  refresh: () => apiClient.post('/auth/refresh', {}, { withCredentials: true }),
+  logout: () => apiClient.post('/auth/logout', {}, { withCredentials: true }),
 }
 
 export const jobsAPI = {
@@ -170,13 +177,12 @@ export const jobsAPI = {
 }
 
 export const profileAPI = {
-  create: (formData) =>
-    apiClient.post('/profile', formData),
+  create: (payload) => apiClient.post('/profile', payload),
   exists: () => apiClient.get('/profile'),
   select: (id) => apiClient.post(`/profile/select/${id}`),
   selected: () => apiClient.get('/profile/selected'),
   get: (id) => apiClient.get(`/profile/${id}`),
-  update: (id, formData) => apiClient.patch(`/profile/${id}`, formData),
+  update: (id, payload) => apiClient.patch(`/profile/${id}`, payload),
   list: (page = 1, per_page = 10) => apiClient.get('/profile', { params: { page, per_page } }),
   delete: (id) => apiClient.delete(`/profile/${id}`),
 }
@@ -184,6 +190,7 @@ export const profileAPI = {
 export const apiActions = {
   match: (jobId) => apiClient.post(`/match/${jobId}`),
   buildResume: (jobId) => apiClient.post(`/build_resume/${jobId}`),
+  downloadResumePdf: (jobId) => apiClient.get(`/build_resume/${jobId}/pdf`, { responseType: 'blob' }),
   coverLetter: (jobId) => apiClient.post(`/cover_letter/${jobId}`),
 }
 
@@ -197,26 +204,7 @@ export const applicationsAPI = {
   healthScore: () => apiClient.get('/applications/health-score'),
 }
 
-export const studentAPI = {
-  createProfile: (data) => apiClient.post('/api/student/profile', data),
-  getCurrentProfile: () => apiClient.get('/api/student/profile'),
-  listProfiles: () => apiClient.get('/api/student/profiles'),
-  selectProfile: (profileId) => apiClient.post(`/api/student/profile/select/${profileId}`),
-  getProfile: (id) => apiClient.get(`/api/student/profile/${id}`),
-  updateProfile: (id, data) => apiClient.patch(`/api/student/profile/${id}`, data),
-  deleteProfile: (id) => apiClient.delete(`/api/student/profile/${id}`),
-  getRecommendations: (profileId, limit = 20, filters = {}) =>
-    apiClient.post('/api/student/match/recommend', { student_profile_id: profileId, limit, ...filters }),
-  getProgramMatch: (profileId, programId) =>
-    apiClient.get(`/api/student/match/program/${programId}`, { params: { student_profile_id: profileId } }),
-  getUniversitiesFilter: (params) => apiClient.get('/api/student/universities/filter', { params }),
-  getUniversityDetail: (universityId) => apiClient.get(`/api/student/university/${universityId}/detail`),
-  saveUniversity: (studentId, programId) => apiClient.post('/api/student/save', { student_id: studentId, program_id: programId }),
-  getSavedUniversities: (studentId) => apiClient.get(`/api/student/saved/${studentId}`),
-  applyProgram: (studentId, programId, notes = '') => apiClient.post('/api/student/apply', { student_id: studentId, program_id: programId, notes }),
-  updateApplication: (applicationId, payload) => apiClient.put(`/api/student/applications/${applicationId}`, payload),
-  getApplications: (studentId) => apiClient.get(`/api/student/applications/${studentId}`),
-}
+// studentAPI removed (university module)
 
 export const dailyScoutAPI = {
   run: (data) => apiClient.post('/scout/run', data),

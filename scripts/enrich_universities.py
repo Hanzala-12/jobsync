@@ -384,8 +384,11 @@ def _scrape_program_details(university: University) -> Dict[str, Any]:
 
 
 def enrich_qs_rankings(db, *, limit: Optional[int] = 500, country: Optional[str] = None) -> int:
-    csv_text = _fetch_text(QS_RANKINGS_URL)
-    dataframe = pd.read_csv(StringIO(csv_text))
+    try:
+        csv_text = _fetch_text(QS_RANKINGS_URL)
+        dataframe = pd.read_csv(StringIO(csv_text))
+    except Exception:
+        return 0
     name_column, country_column, rank_column, website_column = _get_university_columns(dataframe.columns)
     if not name_column or not rank_column:
         raise RuntimeError("Unable to detect QS ranking columns")

@@ -10,6 +10,15 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ENABLE_CELERY=${ENABLE_CELERY:-true}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ENABLE_METRICS=${ENABLE_METRICS:-false}
+      - ALLOWED_INGESTION_DOMAINS=${ALLOWED_INGESTION_DOMAINS}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_PERIOD=${RATE_LIMIT_PERIOD:-60}
       - ENV=production
     volumes:
       - jobsync_data:/app/data
@@ -31,6 +40,46 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A backend.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=sqlite:///app/jobsync.db
+      - SECRET_KEY=${SECRET_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ENABLE_CELERY=true
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ENABLE_METRICS=${ENABLE_METRICS:-false}
+      - ALLOWED_INGESTION_DOMAINS=${ALLOWED_INGESTION_DOMAINS}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_PERIOD=${RATE_LIMIT_PERIOD:-60}
+      - ENV=production
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - jobsync_data:/app/data
+      - jobsync_chroma:/app/chroma_db
+      - jobsync_outputs:/app/outputs
 
 volumes:
   jobsync_data:

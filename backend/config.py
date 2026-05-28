@@ -16,7 +16,8 @@ USER_AGENT = os.getenv("USER_AGENT", "Mozilla/5.0 (compatible; JobFinderBot/1.0)
 
 # Feature flags
 ENABLE_JOB_SCRAPING = os.getenv("ENABLE_JOB_SCRAPING", "true").lower() in {"1", "true", "yes"}
-ENABLE_UNIVERSITY_SCRAPING = os.getenv("ENABLE_UNIVERSITY_SCRAPING", "true").lower() in {"1", "true", "yes"}
+ENABLE_CROSS_ENCODER = os.getenv("ENABLE_CROSS_ENCODER", "false").lower() in {"1", "true", "yes"}
+ENABLE_COLLABORATIVE_FILTERING = os.getenv("ENABLE_COLLABORATIVE_FILTERING", "false").lower() in {"1", "true", "yes"}
 
 # Other
 ENV = os.getenv("ENV", os.getenv("ENVIRONMENT", "development"))

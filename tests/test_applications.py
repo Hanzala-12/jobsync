@@ -7,6 +7,12 @@ def _auth_header(test_client):
         "password": "SecurePass123!",
         "name": "App User"
     })
+    # If account already exists, login instead
+    if resp.status_code == 409:
+        resp = test_client.post("/auth/login", json={
+            "email": "app@example.com",
+            "password": "SecurePass123!",
+        })
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
 

@@ -65,3 +65,24 @@ def test_login_token_invalidated_after_logout(test_client):
     # Token should no longer work
     response = test_client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
+
+
+def test_refresh_cookie_flow_and_logout_revocation(test_client):
+    signup = test_client.post("/auth/signup", json={
+        "email": "refresh@example.com",
+        "password": "SecurePass123!",
+        "name": "Refresh User",
+    })
+    access_token = signup.json()["access_token"]
+
+    refresh_response = test_client.post("/auth/refresh")
+    assert refresh_response.status_code == 200
+    refreshed = refresh_response.json()
+    assert "access_token" in refreshed
+    assert refreshed["access_token"]
+
+    logout_response = test_client.post("/auth/logout", headers={"Authorization": f"Bearer {access_token}"})
+    assert logout_response.status_code == 200
+
+    revoked_refresh = test_client.post("/auth/refresh")
+    assert revoked_refresh.status_code == 401

@@ -5,6 +5,7 @@ from backend.schemas import SkillGapRequest, SkillGapResponse, InterviewPrepRequ
 from core.llm_provider import LLMProvider
 from backend.models import UserProfile, User
 from backend.security import get_current_user
+from backend.services.profile_data import parse_string_list
 import json
 import logging
 
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/intelligence", tags=["Intelligence"])
 @router.post("/skill-gap", response_model=SkillGapResponse)
 def skill_gap_analysis(req: SkillGapRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
-    my_skills = profile.skills if profile else ""
+    my_skills = ", ".join(parse_string_list(profile.skills)) if profile else ""
 
     descs = "\n".join([f"- {d[:500]}" for d in req.job_descriptions[:10]])
     prompt = f"""Given these job descriptions:
