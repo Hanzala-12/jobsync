@@ -19,6 +19,7 @@ from scripts.matching_eval_utils import DATA_PATH, BM25Scorer, evaluate_rankings
 
 DEFAULT_BI_ENCODER_MODEL = os.getenv("BI_ENCODER_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 DEFAULT_CROSS_ENCODER_MODEL = os.getenv("CROSS_ENCODER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+DEFAULT_USE_SENTENCE_TRANSFORMERS = os.getenv("USE_SENTENCE_TRANSFORMERS", "false").lower() in {"1", "true", "yes", "on"}
 DEFAULT_ENABLE_CROSS_ENCODER = os.getenv("ENABLE_CROSS_ENCODER", "false").lower() in {"1", "true", "yes", "on"}
 
 
@@ -94,7 +95,9 @@ class PairwiseLogisticScorer:
 
 def _load_dataset(path: Path) -> pd.DataFrame:
     if not path.exists():
-        raise FileNotFoundError(f"Dataset not found: {path}. Run scripts/build_labeled_dataset.py first.")
+        raise FileNotFoundError(
+            f"Dataset not found: {path}. Run scripts/import_public_dataset.py or scripts/build_labeled_dataset.py first."
+        )
     df = pd.read_csv(path)
     required = {"resume_id", "resume_text", "jd_id", "jd_text", "relevance_score"}
     missing = required - set(df.columns)
@@ -146,14 +149,20 @@ def main() -> int:
     relevance_matrix = _build_relevance_matrix(df, resume_ids, jd_ids)
 
     bm25 = BM25Scorer(job_texts)
-    try:
-        from sentence_transformers import CrossEncoder, SentenceTransformer  # type: ignore
+    if DEFAULT_USE_SENTENCE_TRANSFORMERS:
+        try:
+            from sentence_transformers import CrossEncoder, SentenceTransformer  # type: ignore
 
-        bi_encoder = SentenceTransformer(DEFAULT_BI_ENCODER_MODEL)
-        cross_encoder_factory = lambda: CrossEncoder(DEFAULT_CROSS_ENCODER_MODEL)
-        dense_backend = "sentence-transformers"
-    except Exception as exc:
-        print(f"Dense embedding backend unavailable, using TF-IDF fallback: {exc}")
+            bi_encoder = SentenceTransformer(DEFAULT_BI_ENCODER_MODEL)
+            cross_encoder_factory = lambda: CrossEncoder(DEFAULT_CROSS_ENCODER_MODEL)
+            dense_backend = "sentence-transformers"
+        except Exception as exc:
+            print(f"Dense embedding backend unavailable, using TF-IDF fallback: {exc}")
+            bi_encoder = TfIdfEncoder().fit(resume_texts + job_texts)
+            cross_encoder_factory = lambda: PairwiseLogisticScorer(bi_encoder).fit(df)
+            dense_backend = "tfidf-fallback"
+    else:
+        print("USE_SENTENCE_TRANSFORMERS=false, using TF-IDF fallback for reproducible evaluation.")
         bi_encoder = TfIdfEncoder().fit(resume_texts + job_texts)
         cross_encoder_factory = lambda: PairwiseLogisticScorer(bi_encoder).fit(df)
         dense_backend = "tfidf-fallback"

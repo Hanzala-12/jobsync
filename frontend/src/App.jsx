@@ -11,9 +11,9 @@ import SkillGap from './pages/SkillGap'
 import Kanban from './pages/Kanban'
 import MockInterview from './pages/MockInterview'
 import DailyScout from './pages/DailyScout'
+import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
-// university-related components removed
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 const AUTH_BYPASS = (import.meta.env.VITE_AUTH_BYPASS || '').toString().toLowerCase() === 'true'
@@ -51,11 +51,11 @@ function AppRoutes() {
           <Route path="/applications" element={<Applications />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/cover-letter" element={<CoverLetter />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/interview" element={<Interview />} />
           <Route path="/mock-interview" element={<MockInterview />} />
           <Route path="/skill-gap" element={<SkillGap />} />
           <Route path="/daily-scout" element={<DailyScout />} />
-          {/* student/university routes removed */}
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/signup" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

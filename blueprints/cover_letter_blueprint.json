@@ -1,0 +1,16 @@
+{
+  "sections": [
+    {
+      "name": "opening",
+      "template": "Dear Hiring Manager,\n\nI am writing to apply for the {job_title} position at {company}."
+    },
+    {
+      "name": "body",
+      "template": "My experience with {skills} aligns perfectly with your requirements. In my previous role at {previous_company}, I {achievement}."
+    },
+    {
+      "name": "closing",
+      "template": "Thank you for considering my application. I look forward to the opportunity to discuss how I can contribute to {company}."
+    }
+  ]
+}

@@ -16,7 +16,7 @@ except Exception:  # pragma: no cover - optional dependency in lightweight test 
     redis_from_url = None
 
 from backend.database import engine, Base
-from backend.routers import resume, jobs, applications, cover_letter, intelligence, auth
+from backend.routers import resume, jobs, applications, cover_letter, intelligence, auth, settings
 from backend.routers import tasks as tasks_router
 from backend.routers import kanban, voice_interview, browser_extension, followup
 import importlib
@@ -242,6 +242,7 @@ app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(cover_letter.router)
 app.include_router(intelligence.router)
+app.include_router(settings.router)
 app.include_router(profile.router)
 app.include_router(tasks_router.api_router)
 

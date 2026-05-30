@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
+from backend.database import SessionLocal
+from backend.security import get_current_user_context
+from backend.services.user_api_keys import get_user_api_key_value
+
 load_dotenv()
 
 logger = logging.getLogger("jobsync.llm_provider")
@@ -82,6 +86,46 @@ class LLMProvider:
         self.provider_type = self.backends[0].provider if self.backends else None
         self.api_key = self.backends[0].api_key if self.backends else ""
 
+    def _current_user_id(self) -> int | None:
+        return get_current_user_context()
+
+    def _user_key_for_provider(self, provider: str) -> str:
+        user_id = self._current_user_id()
+        if not user_id:
+            return ""
+
+        db = SessionLocal()
+        try:
+            return get_user_api_key_value(db, user_id, provider)
+        finally:
+            db.close()
+
+    def _append_user_candidates(self, provider: str, add_backend) -> None:
+        custom_key = self._user_key_for_provider(provider)
+        if not custom_key:
+            return
+
+        if provider == "openrouter":
+            add_backend(
+                "openrouter",
+                custom_key,
+                os.getenv("LLM_MODEL_OPENROUTER", DEFAULT_OPENROUTER_MODEL),
+                os.getenv("OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL),
+            )
+        elif provider == "openai":
+            add_backend(
+                "openai",
+                custom_key,
+                os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
+                os.getenv("OPENAI_BASE_URL", DEFAULT_OPENAI_BASE_URL),
+            )
+        elif provider == "groq":
+            add_backend(
+                "groq",
+                custom_key,
+                os.getenv("LLM_MODEL_GROQ", DEFAULT_GROQ_MODEL),
+            )
+
     def _build_backends(self) -> list[_LLMBackend]:
         provider_hint = (os.getenv("LLM_PROVIDER") or "").strip().lower()
         candidates = []
@@ -105,6 +149,7 @@ class LLMProvider:
                 preferred_order.append(provider_name)
 
         for provider_name in preferred_order:
+            self._append_user_candidates(provider_name, add_backend)
             self._append_provider_candidates(provider_name, add_backend)
 
         deduped = []

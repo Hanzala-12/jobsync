@@ -107,15 +107,7 @@ The job module is the main career workflow in the product.
 
 ### 3.2 Student (University) Module
 
-The student module supports higher-education planning and program matching.
-
-- Student profiles store academic background, scores, budgets, preferred countries, and degree preferences.
-- Universities and programs are stored in the database and can be filtered by multiple criteria.
-- Matching uses program data, heuristic scoring, and RAG-based explanations.
-- Live verification can query the web through SearXNG to validate tuition and admissions details.
-- Students can save programs and track application status.
-- Scholarships are tracked and exposed alongside university data.
-
+The student/university workflow has been removed from the core codebase for the current distribution. Historical design notes and analysis remain in project documents, but active routes, components, and services for university/program matching should not be relied upon in this tree.
 ### 3.3 Shared / Cross-cutting
 
 - JWT authentication protects the authenticated API surface.
@@ -177,16 +169,8 @@ Key behaviors:
 | `/daily-scout` | Automated job discovery |
 
 ### Student routes
-| Route | Purpose |
-|---|---|
-| `/student/profile` | Student academic profile editor |
-| `/student/dashboard` | Student dashboard |
-| `/student/search` | University and program search |
-| `/student/matches` | University match results |
-| `/student/saved` | Saved universities/programs |
-| `/student/applications` | Study application tracking |
-| `/student/scholarships` | Scholarship browsing |
-| `/student` | Redirects to the student dashboard or profile setup flow |
+
+Student-focused routes and pages have been removed from the active application routes in this repository. Refer to historical notes if you need to re-enable or port these features.
 
 ## 6. Analysis of Both Modules
 

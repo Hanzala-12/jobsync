@@ -42,7 +42,19 @@ vi.mock('../api/client', () => ({
     salaryEstimate: vi.fn().mockResolvedValue({ data: { local_min: 120000, local_max: 220000, remote_min: 1500, remote_max: 3500, market_demand: 'medium', negotiation_tip: 'Use quantified impact.' } }),
   },
   profileAPI: {
-    list: vi.fn().mockResolvedValue({ data: { exists: true, selected_profile_id: 1 } }),
+    list: vi.fn().mockResolvedValue({
+      data: {
+        exists: true,
+        selected_profile_id: 1,
+        profiles: [{ id: 1, profile_completeness: 100, is_complete: true }],
+      },
+    }),
+    selected: vi.fn().mockResolvedValue({
+      data: {
+        selected_profile_id: 1,
+        profile: { id: 1, profile_completeness: 100, is_complete: true },
+      },
+    }),
   },
   apiActions: {
     buildResume: buildResumeMock,
@@ -70,6 +82,8 @@ describe('Jobs page', () => {
         <Jobs />
       </MemoryRouter>,
     )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
     expect(jobsAPI.search).toHaveBeenCalled()

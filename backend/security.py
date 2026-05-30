@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from contextvars import ContextVar
 from typing import Any, Dict
 
 from fastapi import Depends, HTTPException, Query, status
@@ -32,6 +33,7 @@ REFRESH_TOKEN_EXPIRE_DAYS = max(1, int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "1
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+current_user_id_context: ContextVar[int | None] = ContextVar("current_user_id_context", default=None)
 
 
 if not _ENV_SECRET_KEY:
@@ -127,6 +129,7 @@ def create_access_token_for_user(user: User) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
         "iat": datetime.now(timezone.utc),
     }
+    current_user_id_context.set(int(user.id))
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -139,6 +142,14 @@ def create_refresh_token_for_user(user: User) -> str:
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def set_current_user_context(user_id: int | None) -> None:
+    current_user_id_context.set(int(user_id) if user_id is not None else None)
+
+
+def get_current_user_context() -> int | None:
+    return current_user_id_context.get()
 
 
 def get_current_user(token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
@@ -165,6 +176,7 @@ def get_current_user(token: str | None = Depends(oauth2_scheme), db: Session = D
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     if int(payload.get("ver", 0) or 0) != _token_version_for_user(user):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
+    set_current_user_context(user.id)
     return user
 
 
@@ -172,7 +184,10 @@ def get_optional_current_user(token: str | None = Depends(oauth2_scheme), db: Se
     if not token:
         return None
     try:
-        return get_current_user(token=token, db=db)
+        user = get_current_user(token=token, db=db)
+        if user:
+            set_current_user_context(user.id)
+        return user
     except HTTPException:
         return None
 
@@ -204,6 +219,7 @@ def get_current_user_from_stream(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     if int(payload.get("ver", 0) or 0) != _token_version_for_user(user):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
+    set_current_user_context(user.id)
     return user
 
 

@@ -15,8 +15,9 @@ import logging
 # simple in-memory cache for recent search results
 _search_cache: Dict[str, tuple] = {}
 _logger = logging.getLogger(__name__)
-_SEARCH_CACHE_TTL = 30
-_SOURCE_TIMEOUT_SECONDS = max(4, int(os.getenv("SOURCE_TIMEOUT_SECONDS", "12")))
+_SEARCH_CACHE_TTL = 300
+_SOURCE_TIMEOUT_SECONDS = 10
+_GLOBAL_SEARCH_TIMEOUT_SECONDS = 15
 
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/{country}/search/1"
 REMOTIVE_URL = "https://remotive.com/api/remote-jobs"
@@ -88,6 +89,15 @@ PAKISTAN_SOURCE_STATUS: List[Dict[str, object]] = [
     },
 ]
 
+MOCK_COMPANY_NAMES = {
+    "brand demand",
+    "test company",
+    "testco",
+    "seedai labs",
+    "vectorai",
+    "deepsignal",
+}
+
 
 def clean_text(value: Optional[str]) -> str:
     if not value:
@@ -95,6 +105,10 @@ def clean_text(value: Optional[str]) -> str:
     text = HTML_TAG_RE.sub(" ", str(value))
     text = html.unescape(text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _is_mock_company(value: Optional[str]) -> bool:
+    return clean_text(value).strip().lower() in MOCK_COMPANY_NAMES
 
 
 def get_pakistan_source_status() -> List[Dict[str, object]]:
@@ -210,7 +224,7 @@ def fetch_adzuna(query: str, country_code: str = "pk", where: str = "", results_
             "where": where,
             "results_per_page": results_per_page,
         },
-        timeout=4,
+        timeout=_SOURCE_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
@@ -221,7 +235,7 @@ def fetch_remotive(query: str, limit: int = 20) -> List[Dict]:
     response = requests.get(
         REMOTIVE_URL,
         params={"search": query, "limit": limit},
-        timeout=4,
+        timeout=_SOURCE_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     return [_normalize_job(item, "remotive") for item in (response.json().get("jobs") or [])]
@@ -231,7 +245,7 @@ def fetch_jobicy(query: str, count: int = 20) -> List[Dict]:
     response = requests.get(
         JOBICY_URL,
         params={"tag": query, "count": count},
-        timeout=4,
+        timeout=_SOURCE_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
 
@@ -269,6 +283,16 @@ def _query_variants(query: str) -> List[str]:
     variants = [normalized]
     if _is_ai_query(normalized):
         variants.extend(["ai engineer", "machine learning", "ai ml", "data science", "generative ai"])
+    if any(term in normalized for term in ["software", "developer", "engineer", "frontend", "backend", "full stack", "devops", "qa", "mobile"]):
+        variants.extend(["software engineer", "backend engineer", "frontend developer", "full stack developer", "devops engineer", "qa engineer", "mobile developer"])
+    if any(term in normalized for term in ["finance", "financial", "accounting", "accountant", "risk", "investment"]):
+        variants.extend(["finance analyst", "financial analyst", "accountant", "risk analyst", "investment banker"])
+    if any(term in normalized for term in ["marketing", "brand", "seo", "content", "growth", "digital marketing"]):
+        variants.extend(["marketing manager", "digital marketing", "seo specialist", "content writer", "growth manager"])
+    if any(term in normalized for term in ["sales", "business development", "account executive", "customer success"]):
+        variants.extend(["sales representative", "account executive", "business development", "customer success manager"])
+    if any(term in normalized for term in ["operations", "project manager", "hr", "supply chain", "procurement", "program manager"]):
+        variants.extend(["project manager", "operations analyst", "hr generalist", "supply chain coordinator", "procurement analyst", "program manager"])
     return list(dict.fromkeys([variant for variant in variants if variant]))
 
 
@@ -651,12 +675,16 @@ def dedupe_jobs(jobs: List[Dict]) -> List[Dict]:
 
 
 def _clean_jobs(jobs: List[Dict]) -> List[Dict]:
+    cleaned: List[Dict] = []
     for job in jobs:
+        if _is_mock_company(job.get("company")):
+            continue
         job["description"] = clean_text(job.get("description", ""))
-    return jobs
+        cleaned.append(job)
+    return cleaned
 
 
-def search_jobs(
+def _search_jobs_for_query(
     query: str,
     location: str = "Pakistan",
     city: Optional[str] = None,
@@ -664,13 +692,13 @@ def search_jobs(
     country_code: str = "pk",
     pakistan_only: bool = False,
     diagnostics: Optional[Dict] = None,
+    timeout_seconds: float = _GLOBAL_SEARCH_TIMEOUT_SECONDS,
 ) -> List[Dict]:
     query = _normalize_query(query)
     location_key = (location or "").strip().lower()
     is_remote_mode = remote_only or location_key == "remote"
-    cache_key = query
+    cache_key = f"source:{query}|{location_key}|{(city or '').strip().lower()}|{int(bool(remote_only))}|{country_code.lower()}|{int(bool(pakistan_only))}"
 
-    # Simple in-memory cache to speed up repeated queries during active UI use
     try:
         if cache_key in _search_cache:
             ts, cached = _search_cache[cache_key]
@@ -679,16 +707,6 @@ def search_jobs(
     except Exception:
         pass
 
-    def _collect_future(future: concurrent.futures.Future, source_name: str) -> List[Dict]:
-        try:
-            return future.result(timeout=_SOURCE_TIMEOUT_SECONDS)
-        except concurrent.futures.TimeoutError:
-            _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, source_name)
-        except Exception as exc:
-            _logger.warning("search source failed: %s (%s)", source_name, exc)
-        return []
-
-    # diagnostics helper
     def _record(source_name: str, count: int = 0, error: Optional[str] = None, elapsed: Optional[float] = None):
         if diagnostics is None:
             return
@@ -705,7 +723,6 @@ def search_jobs(
         except Exception:
             pass
 
-    # Remote-only mode: skip Adzuna entirely
     if is_remote_mode:
         remotive_jobs: List[Dict] = []
         jobicy_jobs: List[Dict] = []
@@ -732,9 +749,7 @@ def search_jobs(
 
     adzuna_city_jobs: List[Dict] = []
     adzuna_broad_jobs: List[Dict] = []
-    remote_jobs: List[Dict] = []
 
-    # City-specific behavior for Pakistan cities
     if _is_pakistan_city(location, city):
         try:
             adzuna_city_jobs = fetch_adzuna(query=query, country_code="pk", where=resolved_where or location, results_per_page=20)
@@ -750,21 +765,17 @@ def search_jobs(
             _record("adzuna_broad", 0, "failed")
             adzuna_broad_jobs = []
 
-        # Fetch from all sources simultaneously for max results
         rozee_jobs = []
         indexed_jobs = []
         mustakbil_jobs = []
         bing_jobs = []
         linkedin_jobs = []
         careers_jobs = []
-        
-        # Run slower external fetches in parallel with a short per-call timeout
+
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=6)
         try:
             futures = {
                 executor.submit(fetch_rozee_pakistan, query, resolved_where or location, 1): "rozee",
-                # indexed fallback is expensive; run only if we need more results later
-                # executor.submit(fetch_indexed_pakistan, query, resolved_where or location, 6): "indexed",
                 executor.submit(fetch_mustakbil_pakistan, query, resolved_where or location, 1): "mustakbil",
                 executor.submit(fetch_bing_pakistan, query, resolved_where or location, 1): "bing",
                 executor.submit(fetch_linkedin_indexed, query, resolved_where or location, 4): "linkedin",
@@ -773,7 +784,7 @@ def search_jobs(
 
             done, pending = concurrent.futures.wait(
                 set(futures.keys()),
-                timeout=_SOURCE_TIMEOUT_SECONDS,
+                timeout=timeout_seconds,
                 return_when=concurrent.futures.ALL_COMPLETED,
             )
 
@@ -795,14 +806,13 @@ def search_jobs(
                     linkedin_jobs = res
                 elif name == "careers":
                     careers_jobs = res
-                # record successful counts
                 try:
                     _record(name, len(res or []))
                 except Exception:
                     pass
 
             for fut in pending:
-                _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, futures.get(fut, "unknown"))
+                _logger.warning("search source timed out after %ss: %s", timeout_seconds, futures.get(fut, "unknown"))
                 try:
                     _record(futures.get(fut, "unknown"), 0, "timed_out")
                 except Exception:
@@ -817,8 +827,6 @@ def search_jobs(
             pass
 
         combined_adzuna = dedupe_jobs(adzuna_city_jobs + adzuna_broad_jobs)
-        # Try indexed fallback only if combined sources are low
-        indexed_jobs = []
         all_sources = rozee_jobs + mustakbil_jobs + indexed_jobs + bing_jobs + linkedin_jobs + careers_jobs + brightspyre_jobs
         combined_adzuna = dedupe_jobs(combined_adzuna + all_sources)
 
@@ -831,14 +839,12 @@ def search_jobs(
                 result = dedupe_jobs(_clean_jobs(combined_adzuna))
             except Exception:
                 _record("indexed", 0, "failed")
-                pass
         try:
             _search_cache[cache_key] = (time.time(), result)
         except Exception:
             pass
         return result
 
-    # Pakistan (no city) or non-city location mode
     adzuna_jobs: List[Dict] = []
     try:
         adzuna_jobs = fetch_adzuna(query=query, country_code=country, where=resolved_where, results_per_page=20)
@@ -849,16 +855,14 @@ def search_jobs(
 
     combined = list(adzuna_jobs)
 
-    # Get jobs from all Pakistan sources simultaneously
     rozee_jobs = []
     mustakbil_jobs = []
     bing_jobs = []
     brightspyre_jobs = []
     linkedin_jobs = []
     careers_jobs = []
-    
+
     if country.lower() == "pk":
-        # Parallelize Pakistan-wide source fetches to reduce latency
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=6)
         try:
             futures = {
@@ -872,7 +876,7 @@ def search_jobs(
 
             done, pending = concurrent.futures.wait(
                 set(futures.keys()),
-                timeout=_SOURCE_TIMEOUT_SECONDS,
+                timeout=timeout_seconds,
                 return_when=concurrent.futures.ALL_COMPLETED,
             )
 
@@ -902,7 +906,7 @@ def search_jobs(
                     pass
 
             for fut in pending:
-                _logger.warning("search source timed out after %ss: %s", _SOURCE_TIMEOUT_SECONDS, futures.get(fut, "unknown"))
+                _logger.warning("search source timed out after %ss: %s", timeout_seconds, futures.get(fut, "unknown"))
                 try:
                     _record(futures.get(fut, "unknown"), 0, "timed_out")
                 except Exception:
@@ -917,7 +921,6 @@ def search_jobs(
         combined.extend(linkedin_jobs)
         combined.extend(careers_jobs)
 
-        # cache the combined result briefly
         try:
             result = dedupe_jobs(_clean_jobs(combined))
             _search_cache[cache_key] = (time.time(), result)
@@ -932,7 +935,6 @@ def search_jobs(
     if country.lower() == "pk":
         return dedupe_jobs(_clean_jobs(combined))
 
-    # standard fallback when both toggles are off
     if len(combined) < 5:
         try:
             remotive_jobs = [
@@ -954,3 +956,70 @@ def search_jobs(
         combined.extend(_mark_remote(jobicy_jobs))
 
     return dedupe_jobs(_clean_jobs(combined))
+
+
+def search_jobs(
+    query: str,
+    location: str = "Pakistan",
+    city: Optional[str] = None,
+    remote_only: bool = False,
+    country_code: str = "pk",
+    pakistan_only: bool = False,
+    diagnostics: Optional[Dict] = None,
+) -> List[Dict]:
+    normalized_query = _normalize_query(query)
+    variants = _query_variants(normalized_query)
+    if not variants:
+        return []
+
+    merged_cache_key = f"merged:{normalized_query}|{(location or '').strip().lower()}|{(city or '').strip().lower()}|{int(bool(remote_only))}|{country_code.lower()}|{int(bool(pakistan_only))}"
+    try:
+        if merged_cache_key in _search_cache:
+            ts, cached = _search_cache[merged_cache_key]
+            if time.time() - ts < _SEARCH_CACHE_TTL:
+                return cached
+    except Exception:
+        pass
+
+    max_variant_attempts = min(4, len(variants))
+    merged: List[Dict] = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_variant_attempts) as executor:
+        futures = {
+            executor.submit(
+                _search_jobs_for_query,
+                variant,
+                location,
+                city,
+                remote_only,
+                country_code,
+                pakistan_only,
+                diagnostics,
+                _SOURCE_TIMEOUT_SECONDS,
+            ): variant
+            for variant in variants[:max_variant_attempts]
+        }
+
+        done, pending = concurrent.futures.wait(
+            futures,
+            timeout=_GLOBAL_SEARCH_TIMEOUT_SECONDS,
+            return_when=concurrent.futures.ALL_COMPLETED,
+        )
+
+        for future in done:
+            try:
+                result = future.result()
+            except Exception:
+                continue
+            if result:
+                merged.extend(result)
+
+        for future in pending:
+            future.cancel()
+
+    final_results = dedupe_jobs(_clean_jobs(merged)) if merged else []
+    try:
+        _search_cache[merged_cache_key] = (time.time(), final_results)
+    except Exception:
+        pass
+    return final_results

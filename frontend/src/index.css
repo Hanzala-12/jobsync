@@ -21,18 +21,6 @@
   --j-amber: #d97706;
   --j-red: #dc2626;
 
-  /* ── University Module (warm, academic) ── */
-  --u-bg: #faf8f5;
-  --u-surface: #ffffff;
-  --u-surface-2: #f2ede7;
-  --u-border: #e5ddd3;
-  --u-text-1: #1c1712;
-  --u-text-2: #5a5047;
-  --u-text-3: #9c9188;
-  --u-accent: #7c3aed;
-  --u-accent-light: #ede9fe;
-  --u-gold: #b45309;
-
   /* ── Shared ── */
   --radius: 10px;
   --radius-sm: 6px;

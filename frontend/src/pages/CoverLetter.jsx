@@ -15,6 +15,7 @@ function CoverLetter() {
   const [tone, setTone] = useState('Professional')
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     if (location.state?.job) {
@@ -46,14 +47,27 @@ function CoverLetter() {
     await navigator.clipboard.writeText(draft)
   }
 
-  const downloadDraft = () => {
-    const blob = new Blob([draft], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'cover-letter.txt'
-    link.click()
-    URL.revokeObjectURL(url)
+  const downloadPdf = async () => {
+    setDownloading(true)
+    try {
+      const response = await coverLetterAPI.download({
+        role: jobTitle,
+        company,
+        job_description: jobDescription,
+        tone: tone.toLowerCase(),
+      })
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `cover-letter-${(jobTitle || 'draft').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   return (
@@ -122,7 +136,7 @@ function CoverLetter() {
               <div className="letter-actions">
                 <div>
                   <button className="icon-btn-text" onClick={copyDraft}><Copy size={14} /> Copy Document</button>
-                  <button className="icon-btn-text" onClick={downloadDraft}><Download size={14} /> Download</button>
+                  <button className="icon-btn-text" onClick={downloadPdf} disabled={downloading}><Download size={14} /> Download as PDF</button>
                 </div>
                 <button type="button" className="regen-btn" onClick={generate}><RefreshCw size={12} style={{ display: 'inline', marginRight: 4 }}/>Regenerate</button>
               </div>

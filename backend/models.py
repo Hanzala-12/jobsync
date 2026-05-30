@@ -132,6 +132,22 @@ class UserPreference(Base):
     user = relationship("User")
 
 
+class UserApiKey(Base):
+    __tablename__ = "user_api_keys"
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_user_api_keys_user_provider"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider = Column(String, nullable=False, index=True)
+    encrypted_api_key = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("User")
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
@@ -178,6 +194,22 @@ class Application(Base):
     resume_version = Column(String, nullable=True)
     contact_email = Column(String, nullable=True)
     user = relationship("User")
+
+
+class UserJobInteraction(Base):
+    __tablename__ = "user_job_interactions"
+    __table_args__ = (
+        Index("ix_user_job_interactions_user_job_type", "user_id", "job_id", "interaction_type"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    interaction_type = Column(String, nullable=False, index=True)
+    timestamp = Column(DateTime, server_default=func.now(), nullable=False)
+
+    user = relationship("User")
+    job = relationship("Job")
 
 
 class TimestampMixin:

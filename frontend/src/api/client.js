@@ -204,8 +204,6 @@ export const applicationsAPI = {
   healthScore: () => apiClient.get('/applications/health-score'),
 }
 
-// studentAPI removed (university module)
-
 export const dailyScoutAPI = {
   run: (data) => apiClient.post('/scout/run', data),
   status: () => apiClient.get('/scout/status'),
@@ -213,6 +211,13 @@ export const dailyScoutAPI = {
 
 export const coverLetterAPI = {
   generate: (data) => apiClient.post('/cover-letter/generate', data),
+  download: (data) => apiClient.post('/cover-letter/download', data, { responseType: 'blob' }),
+}
+
+export const settingsAPI = {
+  listKeys: () => apiClient.get('/settings/keys'),
+  saveKey: (payload) => apiClient.post('/settings/keys', payload),
+  deleteKey: (provider) => apiClient.delete(`/settings/keys/${provider}`),
 }
 
 export const intelligenceAPI = {

@@ -1,0 +1,31 @@
+{
+  "dataset_path": "data\\public_datasets\\youseff1987-resume-matching-dataset-v2-test.csv",
+  "num_queries": 20,
+  "num_pairs": 20,
+  "candidate_pool_size": 20,
+  "enable_cross_encoder": true,
+  "dense_backend": "sentence-transformers",
+  "pipeline": "bm25_bi_encoder_cross_encoder",
+  "stages": {
+    "bm25": {
+      "ndcg_at_5": 0.7,
+      "mrr": 0.7,
+      "precision_at_5": 0.14
+    },
+    "bm25_bi_encoder": {
+      "ndcg_at_5": 0.053080315582242535,
+      "mrr": 0.09102605212125336,
+      "precision_at_5": 0.02
+    },
+    "bm25_bi_encoder_cross_encoder": {
+      "ndcg_at_5": 0.09653382790366966,
+      "mrr": 0.12823854142933092,
+      "precision_at_5": 0.030000000000000006
+    }
+  },
+  "final_metrics": {
+    "ndcg_at_5": 0.09653382790366966,
+    "mrr": 0.12823854142933092,
+    "precision_at_5": 0.030000000000000006
+  }
+}

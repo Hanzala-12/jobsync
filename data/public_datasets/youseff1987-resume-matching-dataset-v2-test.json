@@ -1,0 +1,10 @@
+{
+  "dataset_id": "Youseff1987/resume-matching-dataset-v2",
+  "split": "test",
+  "rows": 5000,
+  "benchmark_rows": 1000,
+  "score_mapping": "0=irrelevant, 1=partial match, 2=strong match",
+  "source": "Hugging Face public dataset",
+  "csv_path": "data\\public_datasets\\youseff1987-resume-matching-dataset-v2-test.csv",
+  "benchmark_csv_path": "data\\public_datasets\\youseff1987-resume-matching-dataset-v2-test-benchmark.csv"
+}

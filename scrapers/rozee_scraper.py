@@ -7,8 +7,6 @@ from urllib.parse import quote_plus
 
 import requests
 from sqlalchemy.orm import Session
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 
 try:
@@ -128,16 +126,11 @@ def scrape_query(keyword: str = "software engineer", city: Optional[str] = "laho
     jobs: List[Dict] = []
     session = requests.Session()
     session.headers.update({"User-Agent": ROZEE_USER_AGENT, "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8"})
-    # retry strategy to handle transient network or rate-limit issues
-    retry_strategy = Retry(total=3, backoff_factor=0.6, status_forcelist=[429, 500, 502, 503, 504])
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
 
     for page in range(1, max_pages + 1):
         url = _url_for(keyword, city, page)
         try:
-            response = session.get(url, timeout=20)
+            response = session.get(url, timeout=10)
             response.raise_for_status()
         except requests.RequestException:
             break

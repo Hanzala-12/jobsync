@@ -1,14 +1,14 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
-import { applicationsAPI, jobsAPI } from '../api/client'
+import { applicationsAPI, jobsAPI, profileAPI } from '../api/client'
 import { Search, MapPin, ExternalLink, CheckCircle2 } from 'lucide-react'
 import './Jobs.css'
 import ResumeModal from '../components/ResumeModal'
 
 const PAGE_SIZE = 20
 
-const LOCATION_OPTIONS = ['Pakistan', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'UAE', 'UK', 'Remote']
+const LOCATION_OPTIONS = ['Pakistan', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Remote']
 const PAK_CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad']
 // Job actions should be available once the profile is reasonably complete.
 const PROFILE_COMPLETENESS_THRESHOLD = 30
@@ -20,8 +20,6 @@ const countryMap = {
   Islamabad: 'pk',
   Rawalpindi: 'pk',
   Faisalabad: 'pk',
-  UAE: 'ae',
-  UK: 'gb',
   Remote: 'pk',
 }
 
@@ -52,8 +50,9 @@ function Jobs() {
   const [jobs, setJobs] = useState([])
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
-  const [loading, setLoading] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState('')
+  const [searchAttempted, setSearchAttempted] = useState(false)
   
   const [matchModalOpen, setMatchModalOpen] = useState(false)
   const [matchModalLoading, setMatchModalLoading] = useState(false)
@@ -97,7 +96,8 @@ function Jobs() {
   }
 
   const fetchJobsPage = async (pageNumber = 1, { replace = true } = {}) => {
-    setLoading(true)
+    setIsSearching(true)
+    setSearchAttempted(true)
     setError('')
     setSalaryCard(null)
     setSalaryData(null)
@@ -105,6 +105,9 @@ function Jobs() {
     const cityParam = location === 'Pakistan' || location === 'UAE' || location === 'UK' || location === 'Remote' ? '' : location
 
     try {
+      if (replace && pageNumber === 1) {
+        setJobs([])
+      }
       const response = await jobsAPI.search({
         query,
         location,
@@ -119,13 +122,16 @@ function Jobs() {
       setHasMore(incoming.length === PAGE_SIZE)
       setPage(pageNumber)
       setJobs((current) => (replace || pageNumber === 1 ? incoming : [...current, ...incoming]))
+      if (!incoming.length) {
+        setError('No live jobs found. Try again later.')
+      }
     } catch (e) {
       console.error('Search error:', e)
-      setError('Could not fetch jobs. Please try again.')
+      setError('No live jobs found. Try again later.')
       setJobs([])
       setHasMore(false)
     }
-    setLoading(false)
+    setIsSearching(false)
   }
 
   const search = async () => {
@@ -133,12 +139,12 @@ function Jobs() {
   }
 
   const loadMore = async () => {
-    if (!hasMore || loading) return
+    if (!hasMore || isSearching) return
     await fetchJobsPage(page + 1, { replace: false })
   }
 
   const previousPage = async () => {
-    if (page <= 1 || loading) return
+    if (page <= 1 || isSearching) return
     await fetchJobsPage(page - 1, { replace: true })
   }
 
@@ -278,29 +284,18 @@ function Jobs() {
       let selectedProfile = null
       let selectedProfileId = null
 
-      const authHeader = (() => {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('jobsync_access_token') : ''
-        return token ? { Authorization: `Bearer ${token}` } : {}
-      })()
-
-      const getJson = async (url) => {
-        const response = await fetch(url, { headers: authHeader, credentials: 'include' })
-        if (!response.ok) throw new Error(`Request failed: ${response.status}`)
-        return response.json()
-      }
-
       try {
-        const selectedResponse = await getJson('/api/profile/selected')
-        selectedProfile = selectedResponse?.profile || null
-        selectedProfileId = selectedResponse?.selected_profile_id ?? selectedProfile?.id ?? null
+        const selectedResponse = await profileAPI.selected()
+        selectedProfile = selectedResponse?.data?.profile || null
+        selectedProfileId = selectedResponse?.data?.selected_profile_id ?? selectedProfile?.id ?? null
       } catch {
         selectedProfile = null
         selectedProfileId = null
       }
 
-      const listResponse = await getJson('/api/profile?page=1&per_page=50')
-      const profiles = Array.isArray(listResponse?.profiles) ? listResponse.profiles : []
-      const listSelectedId = listResponse?.selected_profile_id ?? null
+      const listResponse = await profileAPI.list(1, 50)
+      const profiles = Array.isArray(listResponse?.data?.profiles) ? listResponse.data.profiles : []
+      const listSelectedId = listResponse?.data?.selected_profile_id ?? null
       const effectiveSelectedId = selectedProfileId ?? listSelectedId
 
       const selectedFromList = profiles.find((item) => item?.id === effectiveSelectedId) || null
@@ -337,10 +332,8 @@ function Jobs() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => {
-    void fetchJobsPage(1, { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Intentionally do not auto-search on mount.
+  // Users should trigger search explicitly to avoid unexpected job loads.
 
   return (
     <div className="jobs-page">
@@ -358,7 +351,7 @@ function Jobs() {
             onFocus={() => query.length > 0 && setShowSuggestions(true)}
             placeholder="Search software engineer, data analyst, frontend..."
           />
-          <Button onClick={search} loading={loading}>Search</Button>
+          <Button onClick={search} loading={isSearching}>Search</Button>
           
           {showSuggestions && suggestions.length > 0 && (
             <div className="autocomplete-dropdown">
@@ -402,23 +395,32 @@ function Jobs() {
       {profileExists && <p className="status-message success">Profile ready ({profileCompleteness}% complete). Job search, Match Me, and Tailor Resume are enabled.</p>}
       {toast && <p className="status-message success">{toast}</p>}
       
-      {!loading && jobs.length > 0 && <p className="results-count">{resultText}</p>}
+      {!isSearching && jobs.length > 0 && <p className="results-count">{resultText}</p>}
       
-      {loading && (
+      {isSearching && (
         <div className="search-loader">
-          <div className="loader-text">Loading page {page} of job results...</div>
+          <div className="loader-text">Gathering live jobs from Rozee, Mustakbil, and other boards... This may take 10-15 seconds.</div>
           <div className="loader-bar-wrap">
             <div className="loader-bar" style={{ width: '70%' }} />
           </div>
         </div>
       )}
 
-      {!loading && jobs.length === 0 && (
+      {!isSearching && searchAttempted && jobs.length === 0 && (
         <div className="empty-state">
           <Search size={32} color="var(--j-text-3)" opacity={0.5} />
-          <p className="section-label" style={{ marginBottom: 0 }}>NO JOBS FOUND</p>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--j-text-1)' }}>Try a broader search</h2>
-          <p style={{ color: 'var(--j-text-2)' }}>We couldn’t find any jobs for this query yet.<br />Try a broader role title or switch to a different location.</p>
+          <p className="section-label" style={{ marginBottom: 0 }}>NO LIVE JOBS FOUND</p>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--j-text-1)' }}>{error || 'Try again later.'}</h2>
+          <p style={{ color: 'var(--j-text-2)' }}>We searched the live job boards but couldn’t get a fresh result set for this query yet.<br />Try again in a moment or broaden the role title.</p>
+        </div>
+      )}
+
+      {!isSearching && !searchAttempted && jobs.length === 0 && (
+        <div className="empty-state">
+          <Search size={32} color="var(--j-text-3)" opacity={0.5} />
+          <p className="section-label" style={{ marginBottom: 0 }}>SEARCH LIVE JOB BOARDS</p>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--j-text-1)' }}>Run a search to fetch current openings</h2>
+          <p style={{ color: 'var(--j-text-2)' }}>Use the search button to load fresh jobs from the live sources.</p>
         </div>
       )}
 
@@ -505,8 +507,8 @@ function Jobs() {
       </div>
 
       <div className="modal-actions" style={{ marginTop: 16 }}>
-        <Button variant="secondary" disabled={page <= 1 || loading} onClick={previousPage}>Previous</Button>
-        <Button variant="secondary" disabled={!hasMore || loading} onClick={loadMore}>Load More</Button>
+        <Button variant="secondary" disabled={page <= 1 || isSearching} onClick={previousPage}>Previous</Button>
+        <Button variant="secondary" disabled={!hasMore || isSearching} onClick={loadMore}>Load More</Button>
       </div>
 
       {matchModalOpen && (

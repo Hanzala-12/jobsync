@@ -1,8 +1,8 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
-  Briefcase, LayoutDashboard, User, FileText, CheckSquare, 
-  MessageSquare, Video, Target, TrendingUp, LogOut,
+  Briefcase, LayoutDashboard, User, FileText, CheckSquare,
+  MessageSquare, Video, Target, LogOut, Settings,
   
 } from 'lucide-react'
 import './Layout.css'
@@ -15,10 +15,10 @@ const careerLinks = [
   { path: '/kanban', label: 'Kanban Board', icon: LayoutDashboard },
   { path: '/resume', label: 'Resume', icon: FileText },
   { path: '/cover-letter', label: 'Cover Letter', icon: FileText },
+  { path: '/settings', label: 'Settings', icon: Settings },
   { path: '/interview', label: 'Interview Prep', icon: MessageSquare },
   { path: '/mock-interview', label: 'Mock Interview', icon: Video },
   { path: '/skill-gap', label: 'Skill Gap', icon: Target },
-  { path: '/daily-scout', label: 'Daily Scout', icon: TrendingUp },
 ]
 
  
@@ -27,8 +27,6 @@ const Layout = ({ children, studentProfileId = 0, onLogout }) => {
   const location = useLocation()
   const navigate = useNavigate()
   
-  const [module, setModule] = useState('career')
-
   // Decide main class based on path if needed
   const isKanban = location.pathname === '/kanban'
 
@@ -61,16 +59,6 @@ const Layout = ({ children, studentProfileId = 0, onLogout }) => {
           border-left: 3px solid #111 !important;
         }
         
-        .custom-nav-item.university-link:hover {
-          background: #f5f2ff;
-          color: #7c3aed;
-        }
-        .custom-nav-item.university-active {
-          background: #ede9fe !important;
-          color: #7c3aed !important;
-          font-weight: 600 !important;
-          border-left: 3px solid #7c3aed !important;
-        }
       `}</style>
       <aside className="sidebar">
         <div className="sidebar-header">
@@ -82,25 +70,19 @@ const Layout = ({ children, studentProfileId = 0, onLogout }) => {
           <span className="logo-text">JobSync</span>
         </div>
 
-        {/* career-only navigation */}
-
         <div className="sidebar-scroll" style={{ padding: '0 10px' }}>
-          {module === 'career' && (
-            <div className="nav-section">
-              {careerLinks.map((item) => {
-                const active = location.pathname === item.path
-                const Icon = item.icon
-                return (
-                  <Link key={item.path} to={item.path} onClick={() => setModule('career')} className={`custom-nav-item career-link ${active ? 'career-active' : ''}`}>
-                    <Icon size={16} strokeWidth={active ? 2.5 : 2} style={{ opacity: active ? 1 : 0.75 }} />
-                    <span>{item.label}</span>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-
-          {/* university links removed */}
+          <div className="nav-section">
+            {careerLinks.map((item) => {
+              const active = location.pathname === item.path
+              const Icon = item.icon
+              return (
+                <Link key={item.path} to={item.path} className={`custom-nav-item career-link ${active ? 'career-active' : ''}`}>
+                  <Icon size={16} strokeWidth={active ? 2.5 : 2} style={{ opacity: active ? 1 : 0.75 }} />
+                  <span>{item.label}</span>
+                </Link>
+              )
+            })}
+          </div>
         </div>
 
         <div className="sidebar-footer">

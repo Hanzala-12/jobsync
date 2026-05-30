@@ -72,17 +72,7 @@ test('Jobsync E2E: job + student modules', async ({ page }, testInfo) => {
     if (await saveBtn.count()) await Promise.all([page.waitForResponse(resp => resp.url().includes('/profile') && resp.status() < 500, { timeout: 10000 }).catch(()=>{}), saveBtn.click()]);
   } catch (err) { await fail('create-job-profile', err); }
 
-  // 4. Create student profile
-  try {
-    await page.goto(`${FRONTEND_BASE}/student/profile`, { waitUntil: 'networkidle' });
-    // try fill typical student fields
-    const gpa = page.locator('input[name="gpa"], input[placeholder*="GPA"]').first(); if (await gpa.count()) await gpa.fill('3.5');
-    const budget = page.locator('input[name="budget"], input[placeholder*="budget"]').first(); if (await budget.count()) await budget.fill('15000');
-    const country = page.locator('input[name="preferred_countries"], input[placeholder*="country"]').first(); if (await country.count()) await country.fill('Malaysia');
-    const major = page.locator('input[name="intended_major"], input[placeholder*="major"]').first(); if (await major.count()) await major.fill('Computer Science');
-    const submit = page.locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').first();
-    if (await submit.count()) await Promise.all([page.waitForResponse(resp => resp.url().includes('/student') && resp.status() < 500, { timeout: 10000 }).catch(()=>{}), submit.click()]);
-  } catch (err) { await fail('create-student-profile', err); }
+  // 4. (Skip student/university module) — keep E2E focused on job flows
 
   // 5. Job Module Flow
   try {
@@ -106,23 +96,7 @@ test('Jobsync E2E: job + student modules', async ({ page }, testInfo) => {
     const saveBtn = page.locator('button:has-text("Save"), button.save-job, .save-icon').first(); if (await saveBtn.count()) { await saveBtn.click(); await page.waitForSelector('.toast, .notification, .saved', { timeout: 5000 }).catch(()=>{}); }
   } catch (err) { await fail('job-flow', err); }
 
-  // 6. Student Module Flow
-  try {
-    await page.goto(`${FRONTEND_BASE}/student/dashboard`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.university-card, .univ-card, .university', { timeout: 5000 }).catch(()=>{});
-    // go to search
-    await page.goto(`${FRONTEND_BASE}/student/search`, { waitUntil: 'networkidle' });
-    // filters
-    const countrySel = page.locator('input[placeholder*="country"], input[name*="country"]').first(); if (await countrySel.count()) await countrySel.fill('Malaysia');
-    const tuition = page.locator('input[name*="tuition"], input[placeholder*="tuition"]').first(); if (await tuition.count()) await tuition.fill('20000');
-    const matchBtn = page.locator('button:has-text("Match Me"), button:has-text("Get Recommendations"), button.recommend').first(); if (await matchBtn.count()) { await matchBtn.click(); }
-    await page.waitForSelector('.university-card, .univ-card, .university', { timeout: 10000 });
-    // save first university
-    const saveUni = page.locator('button:has-text("Save"), .save-university, button.save').first(); if (await saveUni.count()) { await saveUni.click(); }
-    // applications
-    await page.goto(`${FRONTEND_BASE}/student/applications`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.application-card, .saved-university', { timeout: 5000 }).catch(()=>{});
-  } catch (err) { await fail('student-flow', err); }
+  // 6. (Skipped) Student module removed from E2E
 
   // 7. Cross-module consistency
   try {

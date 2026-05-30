@@ -39,6 +39,20 @@ class LogoutResponse(BaseModel):
     success: bool = True
 
 
+class UserApiKeyStatus(BaseModel):
+    provider: str
+    has_key: bool
+
+
+class UserApiKeyUpsertRequest(BaseModel):
+    provider: str
+    api_key: str
+
+
+class UserApiKeyDeleteResponse(BaseModel):
+    success: bool = True
+
+
 class ResumeAnalysis(BaseModel):
     ats_score: float
     matched_skills: List[str]

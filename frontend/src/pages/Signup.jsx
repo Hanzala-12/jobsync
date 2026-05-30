@@ -44,7 +44,6 @@ function Signup({ onSignup }) {
           <ul className="hero-features">
             <li><span>🎯</span> Smart job matching</li>
             <li><span>📊</span> Application tracking</li>
-            <li><span>🎓</span> University portal</li>
           </ul>
         </div>
       </aside>

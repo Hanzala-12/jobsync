@@ -130,7 +130,7 @@ def scrape_query(keyword: str = "software engineer", city: Optional[str] = "laho
     for page in range(1, max_pages + 1):
         url = _url_for(keyword, city, page)
         try:
-            response = session.get(url, timeout=20)
+            response = session.get(url, timeout=10)
             response.raise_for_status()
         except requests.RequestException:
             break

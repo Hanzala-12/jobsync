@@ -8,6 +8,7 @@ from backend.database import get_db
 from backend.models import Application, ApplicationStatus, ResumeVersion, User, UserProfile
 from backend.security import get_current_user
 from backend.security import require_current_user
+from backend.services.job_interactions import record_user_job_interaction
 from backend.schemas import (
     ApplicationCreate,
     ApplicationOut,
@@ -79,6 +80,13 @@ def create_application(app: ApplicationCreate, current_user: User = Depends(get_
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
+    if new_app.job_id:
+        try:
+            interaction_type = "apply" if new_app.status == ApplicationStatus.APPLIED.value else "save"
+            record_user_job_interaction(db, current_user.id, int(new_app.job_id), interaction_type)
+        except Exception:
+            db.rollback()
+            db.refresh(new_app)
     return new_app
 
 
@@ -201,6 +209,12 @@ def update_status(app_id: int, status_update: StatusUpdate, current_user: User =
     app.status = status_update.status
     db.commit()
     db.refresh(app)
+    if app.job_id and app.status == ApplicationStatus.APPLIED.value:
+        try:
+            record_user_job_interaction(db, current_user.id, int(app.job_id), "apply")
+        except Exception:
+            db.rollback()
+            db.refresh(app)
     return app
 
 

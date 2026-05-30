@@ -11,6 +11,7 @@ from typing import Callable, Dict, Optional
 from core.database import get_db
 from core.deduplicator import daily_dedup_cleanup
 from core.job_checker import check_oldest_jobs
+from backend.services.collaborative_filtering import train_collaborative_filtering_model
 from scrapers import (
     brightspyre_scraper,
     careers_page_scraper,
@@ -21,12 +22,6 @@ from scrapers import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _refresh_match_cache(db, program_limit: int = 50):
-    from backend.services.university_match_service import refresh_match_cache
-
-    return refresh_match_cache(db, program_limit=program_limit)
 
 
 @dataclass
@@ -61,7 +56,7 @@ SCHEDULED_TASKS: Dict[str, ScheduledTask] = {
     "indexed_jobs": ScheduledTask("indexed_jobs", 8, lambda db: indexed_jobs_scraper.run(db)),
     "job_checker": ScheduledTask("job_checker", 1, lambda db: check_oldest_jobs(db, limit=50), "checks 50 oldest jobs"),
     "dedup_cleanup": ScheduledTask("dedup_cleanup", 24, lambda db: daily_dedup_cleanup(db)),
-    "university_match_refresh": ScheduledTask("university_match_refresh", 24, lambda db: _refresh_match_cache(db, program_limit=50), "refreshes university-program match cache"),
+    "collaborative_filtering_train": ScheduledTask("collaborative_filtering_train", 24, lambda db: train_collaborative_filtering_model(db), "trains user-job collaborative filtering model"),
 }
 
 _thread: Optional[threading.Thread] = None

@@ -12,10 +12,11 @@ import logging
 import os
 from backend import services as _services
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from backend.database import get_db
 from backend.models import Job, UserProfile
+from backend.services.job_interactions import record_user_job_interaction
 from backend.schemas import (
     ExplainMatchRequest,
     JobMatch,
@@ -34,7 +35,8 @@ from backend.services.job_apis import (
     fetch_mustakbil_pakistan,
     fetch_rozee_pakistan,
     get_pakistan_source_status,
-    search_jobs,
+        search_jobs,
+        _query_variants,
 )
 from backend.services.job_ranking import rerank_job_candidates
 import requests
@@ -54,6 +56,29 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 _logger = logging.getLogger(__name__)
 _MAX_BG_WORKERS = max(1, int(os.getenv("MAX_BG_WORKERS", "5")))
 _BG_EXECUTOR = ThreadPoolExecutor(max_workers=_MAX_BG_WORKERS, thread_name_prefix="jobsync-bg")
+ENABLE_LIVE_SEARCH_FALLBACK = os.getenv("ENABLE_LIVE_SEARCH_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
+MOCK_COMPANY_NAMES = {
+    "brand demand",
+    "test company",
+    "testco",
+    "seedai labs",
+    "vectorai",
+    "deepsignal",
+}
+
+
+def _real_job_query(query):
+    return query.filter(
+        Job.source.isnot(None),
+        func.lower(Job.source) != "seed",
+        func.lower(Job.url).notlike("%example.com%"),
+        func.lower(Job.apply_url).notlike("%example.com%"),
+        func.lower(func.coalesce(Job.company, "")).notin_(MOCK_COMPANY_NAMES),
+    )
+
+
+def _is_mock_company(value: Optional[str]) -> bool:
+    return clean_text(value).strip().lower() in MOCK_COMPANY_NAMES
 
 
 def _resolve_job_url(job: dict) -> str:
@@ -328,6 +353,8 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
             "salary": job.get("salary") or "",
             "external_id": str(job.get("external_id") or job.get("url") or "").strip() or None,
         }
+        if _is_mock_company(raw_job["company"]):
+            continue
         normalized = normalize_job(raw_job, str(job.get("source") or "unknown"))
         saved_job, _ = process_incoming_job(db, normalized)
         saved_jobs.append(saved_job)
@@ -353,21 +380,7 @@ def _upsert_jobs(db: Session, jobs: List[dict]) -> List[Job]:
 
 
 def _refresh_job_search_query(db: Session, query: str, city: Optional[str], sort: str):
-    search_query = db.query(Job).filter(Job.is_active == True)
-    if query:
-        term = f"%{query.lower()}%"
-        search_query = search_query.filter(
-            (func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term))
-        )
-    if city:
-        search_query = search_query.filter(func.lower(Job.city) == city.strip().lower())
-
-    if sort == "newest":
-        search_query = search_query.order_by(Job.scraped_at.desc().nullslast(), Job.fetched_at.desc().nullslast())
-    else:
-        search_query = search_query.order_by(Job.fetched_at.desc().nullslast())
-
-    return search_query
+    return _job_search_query(db, query=query, city=city, sort=sort)
 
 
 def _log_background_future_error(future):
@@ -379,6 +392,56 @@ def _log_background_future_error(future):
 
 def _bg_generate_cover_letter(job_id, resume_text, company, role, job_description, source, job_url):
     dispatch_cover_letter_generation(job_id, resume_text, company, role, job_description, source, job_url)
+
+
+def _expand_search_terms(query: str) -> List[str]:
+    normalized = re.sub(r"\s+", " ", (query or "")).strip().lower()
+    if not normalized:
+        return []
+
+    terms = {normalized}
+    tokens = set(re.findall(r"[a-z0-9+#.]+", normalized))
+
+    if "machine learning" in normalized or "ml" in tokens:
+        terms.update({"machine learning", "machine learning engineer", "ml", "ai", "artificial intelligence", "data science"})
+
+    if "artificial intelligence" in normalized or "ai" in tokens:
+        terms.update({"artificial intelligence", "ai", "machine learning", "ml", "data science"})
+
+    if "finance analyst" in normalized or "financial analyst" in normalized:
+        terms.update({"finance analyst", "financial analyst", "accountant", "risk analyst", "investment banker"})
+
+    if "marketing" in normalized:
+        terms.update({"marketing", "marketing manager", "digital marketing", "brand manager", "seo specialist", "content writer"})
+
+    if "sales" in normalized:
+        terms.update({"sales", "sales representative", "business development", "account executive"})
+
+    if any(token in normalized for token in ["software", "developer", "engineer", "full stack", "backend", "frontend", "devops", "qa", "mobile"]):
+        terms.update({"software engineer", "frontend developer", "backend engineer", "full stack developer", "devops engineer", "qa engineer", "mobile developer"})
+
+    return [term for term in terms if term]
+
+
+def _job_search_query(db: Session, query: str, city: Optional[str], sort: str):
+    search_query = _real_job_query(db.query(Job).filter(Job.is_active == True))
+    terms = _expand_search_terms(query)
+    if terms:
+        conditions = []
+        for term in terms:
+            pattern = f"%{term}%"
+            conditions.append(Job.title.ilike(pattern))
+            conditions.append(Job.description.ilike(pattern))
+        search_query = search_query.filter(or_(*conditions))
+    if city:
+        search_query = search_query.filter(func.lower(Job.city) == city.strip().lower())
+
+    if sort == "newest":
+        search_query = search_query.order_by(Job.scraped_at.desc().nullslast(), Job.fetched_at.desc().nullslast())
+    else:
+        search_query = search_query.order_by(Job.fetched_at.desc().nullslast())
+
+    return search_query
 
 
 @router.get("/search", response_model=List[JobOut])
@@ -395,34 +458,48 @@ def search_jobs_endpoint(
     current_user = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
-    live_jobs = search_jobs(
-        query=query,
-        location=location,
-        city=city,
-        remote_only=remote_only,
-        country_code=country_code,
-        pakistan_only=pakistan_only,
-    )
-    if live_jobs:
-        _upsert_jobs(db, live_jobs)
-
-    q = _refresh_job_search_query(db, query=query, city=city, sort=sort)
-    total = q.count()
     page = max(1, page)
     limit = max(1, min(100, limit))
-    items = q.offset((page - 1) * limit).limit(limit).all()
+    live_jobs: List[Job] = []
+
+    if ENABLE_LIVE_SEARCH_FALLBACK:
+        try:
+            fetched_jobs = search_jobs(
+                query=query,
+                location=location,
+                city=city,
+                remote_only=remote_only,
+                country_code=country_code,
+                pakistan_only=pakistan_only,
+            )
+            if fetched_jobs:
+                live_jobs = _upsert_jobs(db, fetched_jobs)
+                db.commit()
+        except Exception:
+            db.rollback()
+            _logger.exception("Live search failed; falling back to database results")
+
+    if live_jobs:
+        start = (page - 1) * limit
+        items = live_jobs[start : start + limit]
+    else:
+        q = _refresh_job_search_query(db, query=query, city=city, sort=sort)
+        items = q.offset((page - 1) * limit).limit(limit).all()
 
     profile = _get_selected_profile(db, current_user.id) if current_user else None
+    content_scores: dict[int, float] = {}
     if profile:
         scored_items = []
         for job in items:
             score, include = _score_job_for_profile(job, profile)
             if include:
                 scored_items.append((score, job))
+                if getattr(job, "id", None) is not None:
+                    content_scores[int(job.id)] = float(score)
         scored_items.sort(key=lambda pair: (pair[0], pair[1].id or 0), reverse=True)
         items = [job for _, job in scored_items]
 
-    items = rerank_job_candidates(query, items, profile=profile)
+    items = rerank_job_candidates(query, items, profile=profile, user_id=current_user.id if current_user else None, content_scores=content_scores)
 
     def job_to_out(j: Job):
         return JobOut.model_validate(
@@ -473,7 +550,7 @@ def search_jobs_diagnostics(
     diagnostics: Dict = {}
     # Return diagnostics about DB query execution instead of live scraping
     try:
-        q = db.query(Job).filter(Job.is_active == True)
+        q = _real_job_query(db.query(Job).filter(Job.is_active == True))
         if query:
             term = f"%{query.lower()}%"
             q = q.filter((func.lower(Job.title).like(term)) | (func.lower(Job.description).like(term)))
@@ -620,6 +697,11 @@ def sources_status():
 
 @router.get("/{job_id}/match", response_model=JobMatch)
 def match_job(job_id: int, current_user = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        record_user_job_interaction(db, current_user.id, job_id, "view")
+    except Exception:
+        _logger.exception("Failed to record job view interaction")
+
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         return JobMatch(job_id=job_id, match_percentage=0, explanation="Job not found", missing_skills=[])
