@@ -46,7 +46,7 @@ from core.llm_provider import LLMProvider
 from core.normalizer import normalize_job
 from core.skill_extractor import extract_skills
 from core.match_explainer import explain_match_for
-from backend.services.profile_data import parse_int, parse_string_list, parse_float
+from backend.services.profile_data import parse_int, parse_string_list, parse_float, build_profile_resume_text
 # lazy import RAG functions inside _upsert_jobs to avoid heavy startup imports
 from backend.database import engine
 from backend.security import get_current_user, get_current_user_from_stream, get_optional_current_user
@@ -509,7 +509,9 @@ def search_jobs_endpoint(
                 "company": j.company,
                 "location": j.location,
                 "description": j.description,
-                "url": j.url,
+                "url": j.url or j.apply_url or "",
+                "apply_url": j.apply_url,
+                "external_id": j.external_id,
                 "source": j.source,
                 "posted_date": j.posted_date,
                 "salary": j.salary,
@@ -706,11 +708,14 @@ def match_job(job_id: int, current_user = Depends(get_current_user), db: Session
     if not job:
         return JobMatch(job_id=job_id, match_percentage=0, explanation="Job not found", missing_skills=[])
 
-    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
-    if not profile or not profile.resume_text:
+    profile = _get_selected_profile(db, current_user.id)
+    if not profile:
+        return JobMatch(job_id=job_id, match_percentage=0, explanation="Create a profile first", missing_skills=[])
+
+    resume_text = (profile.resume_text or build_profile_resume_text(profile) or "").strip()
+    if not resume_text:
         return JobMatch(job_id=job_id, match_percentage=0, explanation="Upload resume first", missing_skills=[])
 
-    resume_text = profile.resume_text or ""
     job_text = job.description or ""
 
     # Prefer stored skill arrays if present, otherwise extract on the fly

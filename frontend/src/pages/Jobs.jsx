@@ -194,7 +194,12 @@ function Jobs() {
       const res = await jobsAPI.match(jobId)
       setMatchModalResult(res.data)
     } catch (e) {
-      setMatchModalResult({ match_percentage: null, explanation: 'Failed to fetch match', missing_skills: null, error: true })
+      setMatchModalResult({
+        match_percentage: null,
+        explanation: e?.userMessage || 'Failed to fetch match',
+        missing_skills: null,
+        error: true,
+      })
     } finally {
       setMatchModalLoading(false)
     }

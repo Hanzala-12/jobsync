@@ -302,6 +302,8 @@ class JobOut(ORMBase):
     location: str
     description: str
     url: str
+    apply_url: Optional[str] = None
+    external_id: Optional[str] = None
     source: str
     posted_date: Optional[str] = None
     salary: Optional[str] = None
