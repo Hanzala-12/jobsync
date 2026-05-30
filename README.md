@@ -24,12 +24,12 @@ JobSync Pro is a developer-first job search and application assistant combining 
 
 ```mermaid
 flowchart LR
-  Frontend[React + Vite]
-  Backend[FastAPI]
-  DB[(Postgres / SQLite)]
-  Cache[(Redis)]
-  Worker[Celery (optional)]
-  AI[LLM / RAG / Chroma]
+  Frontend["React + Vite"]
+  Backend["FastAPI"]
+  DB[("Postgres / SQLite")]
+  Cache[("Redis")]
+  Worker["Celery (optional)"]
+  AI["LLM / RAG / Chroma"]
 
   Frontend -->|API requests| Backend
   Backend --> DB
