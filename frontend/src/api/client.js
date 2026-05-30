@@ -204,11 +204,6 @@ export const applicationsAPI = {
   healthScore: () => apiClient.get('/applications/health-score'),
 }
 
-export const dailyScoutAPI = {
-  run: (data) => apiClient.post('/scout/run', data),
-  status: () => apiClient.get('/scout/status'),
-}
-
 export const coverLetterAPI = {
   generate: (data) => apiClient.post('/cover-letter/generate', data),
   download: (data) => apiClient.post('/cover-letter/download', data, { responseType: 'blob' }),

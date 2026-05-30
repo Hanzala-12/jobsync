@@ -10,7 +10,6 @@ import Interview from './pages/Interview'
 import SkillGap from './pages/SkillGap'
 import Kanban from './pages/Kanban'
 import MockInterview from './pages/MockInterview'
-import DailyScout from './pages/DailyScout'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -55,7 +54,6 @@ function AppRoutes() {
           <Route path="/interview" element={<Interview />} />
           <Route path="/mock-interview" element={<MockInterview />} />
           <Route path="/skill-gap" element={<SkillGap />} />
-          <Route path="/daily-scout" element={<DailyScout />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/signup" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

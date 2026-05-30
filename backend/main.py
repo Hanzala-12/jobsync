@@ -251,13 +251,6 @@ app.include_router(kanban.router)
 app.include_router(voice_interview.router)
 app.include_router(browser_extension.router)
 app.include_router(followup.router)
-try:
-    from backend.routers import daily_scout
-    app.include_router(daily_scout.router)
-except Exception:
-    logger.exception("daily_scout router unavailable; continuing without it")
-
-
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     message = exc.detail if isinstance(exc.detail, str) else "Request failed"
@@ -329,7 +322,6 @@ def root():
             "Kanban Board",
             "Interview Practice",
             "Follow-up Agent",
-            "Daily Scout",
             "Browser Extension Support",
             "PDF Generation",
             "Salary Negotiation"

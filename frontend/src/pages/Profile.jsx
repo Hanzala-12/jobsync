@@ -91,6 +91,8 @@ const calculateCompleteness = (profile) => {
   return Math.round((checks.filter(Boolean).length / checks.length) * 100)
 }
 
+const getProfileCompleteness = (profile) => calculateCompleteness(profile || {})
+
 function Field({ label, children, hint }) {
   return (
     <label className="profile-field">
@@ -161,13 +163,23 @@ export default function Profile() {
   const [pageIndex, setPageIndex] = useState(1)
   const [pageSize] = useState(4)
   const [totalProfiles, setTotalProfiles] = useState(0)
+  const [formDirty, setFormDirty] = useState(false)
 
   const completeness = useMemo(() => calculateCompleteness(form), [form])
+  const activeProfileCompleteness = useMemo(() => (selectedProfile ? getProfileCompleteness(selectedProfile) : completeness), [selectedProfile, completeness])
+  const displayedCompleteness = formDirty || editingProfileId ? completeness : activeProfileCompleteness
 
-  const patchForm = (patch) => setForm((current) => ({ ...current, ...patch }))
-  const updateListField = (field, value) => patchForm({ [field]: value })
+  const patchForm = (patch) => {
+    setFormDirty(true)
+    setForm((current) => ({ ...current, ...patch }))
+  }
+  const updateListField = (field, value) => {
+    setFormDirty(true)
+    patchForm({ [field]: value })
+  }
 
   const updateEntry = (field, index, key, value) => {
+    setFormDirty(true)
     setForm((current) => {
       const next = [...current[field]]
       next[index] = { ...next[index], [key]: value }
@@ -176,10 +188,12 @@ export default function Profile() {
   }
 
   const addEntry = (field, blankFactory) => {
+    setFormDirty(true)
     setForm((current) => ({ ...current, [field]: [...current[field], blankFactory()] }))
   }
 
   const removeEntry = (field, index, blankFactory) => {
+    setFormDirty(true)
     setForm((current) => {
       const next = current[field].filter((_, itemIndex) => itemIndex !== index)
       return { ...current, [field]: next.length ? next : [blankFactory()] }
@@ -188,6 +202,7 @@ export default function Profile() {
 
   const resetForm = () => {
     setEditingProfileId(null)
+    setFormDirty(false)
     setForm(createEmptyProfile())
     setActiveTab('overview')
     setMessage('')
@@ -256,6 +271,7 @@ export default function Profile() {
         languages: normalizeEntries(data.languages, blankLanguage),
       })
       setEditingProfileId(profileId)
+      setFormDirty(false)
       setMessage('Loaded profile for editing')
       setActiveTab('overview')
     } catch (error) {
@@ -502,36 +518,84 @@ export default function Profile() {
   }
 
   return (
-    <div className="profile-page fade-up">
-      <div className="profile-hero">
-        <div>
-          <div className="eyebrow">Structured Profile</div>
-          <h1>My Profile</h1>
+    <div className="profile-page fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <section
+        className="app-card"
+        style={{
+          padding: 24,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 20,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Structured Profile</p>
+          <h1 style={{ marginTop: 6 }}>My Profile</h1>
           <p className="subtitle">Capture your education, work history, credentials, and preferences in one profile that powers search and resume generation.</p>
         </div>
-        <div className="completeness-card">
-          <div className="completeness-label">Profile completeness</div>
-          <div className="completeness-meter"><span style={{ width: `${completeness}%` }} /></div>
-          <div className="completeness-value">{completeness}% complete</div>
+        <div
+          style={{
+            minWidth: 240,
+            padding: 16,
+            borderRadius: 16,
+            background: 'linear-gradient(135deg, rgba(58,87,232,0.10), rgba(99,115,248,0.06))',
+            border: '1px solid rgba(58,87,232,0.12)',
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Profile completeness</div>
+          <div style={{ height: 10, borderRadius: 999, background: 'rgba(255,255,255,0.78)', marginTop: 10, overflow: 'hidden' }}>
+            <span style={{ display: 'block', width: `${activeProfileCompleteness}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, var(--j-accent), var(--j-accent-2))' }} />
+          </div>
+          <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: 'var(--j-text-1)' }}>{displayedCompleteness}% complete</div>
         </div>
-      </div>
+      </section>
 
-      <div className="profile-layout structured-layout">
-        <form className="profile-card editor-card fade-up" onSubmit={submit}>
-          <div className="card-heading">
+      <div className="profile-layout structured-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 0.75fr)', gap: 20, alignItems: 'start' }}>
+        <form
+          className="profile-card editor-card fade-up"
+          onSubmit={submit}
+          style={{ background: 'var(--j-surface)', border: '1px solid var(--j-border)', borderRadius: 16, padding: 24, boxShadow: 'var(--j-shadow-sm)' }}
+        >
+          <div className="card-heading" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
             <div>
-              <h3>{editingProfileId ? 'Edit Profile' : 'Create Profile'}</h3>
-              <p>Use the sections below to keep your profile structured and ATS-friendly.</p>
+              <h3 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--j-text-1)' }}>{editingProfileId ? 'Edit Profile' : 'Create Profile'}</h3>
+              <p style={{ color: 'var(--j-text-2)', marginTop: 6 }}>Use the sections below to keep your profile structured and ATS-friendly.</p>
             </div>
-            {message ? <div className="status-msg inline-msg">{message}</div> : null}
+            {message ? <div className="status-msg inline-msg" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(58,87,232,0.10)', color: 'var(--j-accent)', fontWeight: 600 }}>{message}</div> : null}
           </div>
 
-          <div className="tab-strip" role="tablist" aria-label="Profile sections">
+          <div
+            className="tab-strip"
+            role="tablist"
+            aria-label="Profile sections"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}
+          >
             {tabs.map((tab) => {
               const Icon = tab.icon
               const active = activeTab === tab.id
               return (
-                <button key={tab.id} type="button" className={`tab-pill ${active ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)} role="tab" aria-selected={active}>
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`tab-pill ${active ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  role="tab"
+                  aria-selected={active}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    minHeight: 40,
+                    padding: '0 14px',
+                    borderRadius: 14,
+                    border: active ? '1px solid rgba(58,87,232,0.20)' : '1px solid var(--j-border)',
+                    background: active ? 'rgba(58,87,232,0.10)' : 'var(--j-surface-2)',
+                    color: active ? 'var(--j-accent)' : 'var(--j-text-2)',
+                    fontWeight: 700,
+                  }}
+                >
                   <Icon size={14} />
                   {tab.label}
                 </button>
@@ -539,82 +603,82 @@ export default function Profile() {
             })}
           </div>
 
-          <div className="tab-panel">{renderTabContent()}</div>
+          <div className="tab-panel" style={{ paddingTop: 4 }}>{renderTabContent()}</div>
 
-          <div className="form-actions sticky-actions">
+          <div className="form-actions sticky-actions" style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24, flexWrap: 'wrap' }}>
             <Button type="submit" loading={loading}>{editingProfileId ? 'Update Profile' : 'Save Profile'}</Button>
             {editingProfileId ? <Button type="button" variant="secondary" onClick={resetForm}>Cancel Edit</Button> : null}
           </div>
         </form>
 
-        <div className="side-column">
-          <div className="profile-card summary-card fade-up">
-            <div className="summary-head">
+        <div className="side-column" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="profile-card summary-card fade-up" style={{ background: 'var(--j-surface)', border: '1px solid var(--j-border)', borderRadius: 16, padding: 20, boxShadow: 'var(--j-shadow-sm)' }}>
+            <div className="summary-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
               <div>
-                <div className="eyebrow">Active Profile</div>
-                <h3>{selectedProfile?.full_name || 'No active profile'}</h3>
+                <div className="eyebrow" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Active Profile</div>
+                <h3 style={{ marginTop: 6, fontSize: 20, fontWeight: 800, color: 'var(--j-text-1)' }}>{selectedProfile?.full_name || 'No active profile'}</h3>
               </div>
-              {selectedProfile?.profile_completeness ? <span className="sp-badge">{selectedProfile.profile_completeness}%</span> : null}
+              {selectedProfile ? <span className="sp-badge" style={{ padding: '8px 12px', borderRadius: 999, background: 'rgba(58,87,232,0.10)', color: 'var(--j-accent)', fontWeight: 700 }}>{getProfileCompleteness(selectedProfile)}%</span> : null}
             </div>
             {selectedProfile ? (
-              <div className="summary-stack">
-                <p>{selectedProfile.summary || 'Add a summary to quickly introduce your background.'}</p>
-                <div className="summary-grid">
-                  <div><span>Email</span><strong>{selectedProfile.email || 'Not provided'}</strong></div>
-                  <div><span>Location</span><strong>{selectedProfile.location || 'Not provided'}</strong></div>
-                  <div><span>Skills</span><strong>{(selectedProfile.skills || []).length || 0}</strong></div>
-                  <div><span>Projects</span><strong>{(selectedProfile.projects || []).length || 0}</strong></div>
+              <div className="summary-stack" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <p style={{ color: 'var(--j-text-2)', lineHeight: 1.6 }}>{selectedProfile.summary || 'Add a summary to quickly introduce your background.'}</p>
+                <div className="summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  <div style={{ padding: 12, borderRadius: 14, background: 'var(--j-surface-2)', border: '1px solid var(--j-border)' }}><span style={{ display: 'block', fontSize: 12, color: 'var(--j-text-3)', marginBottom: 6 }}>Email</span><strong style={{ color: 'var(--j-text-1)' }}>{selectedProfile.email || 'Not provided'}</strong></div>
+                  <div style={{ padding: 12, borderRadius: 14, background: 'var(--j-surface-2)', border: '1px solid var(--j-border)' }}><span style={{ display: 'block', fontSize: 12, color: 'var(--j-text-3)', marginBottom: 6 }}>Location</span><strong style={{ color: 'var(--j-text-1)' }}>{selectedProfile.location || 'Not provided'}</strong></div>
+                  <div style={{ padding: 12, borderRadius: 14, background: 'var(--j-surface-2)', border: '1px solid var(--j-border)' }}><span style={{ display: 'block', fontSize: 12, color: 'var(--j-text-3)', marginBottom: 6 }}>Skills</span><strong style={{ color: 'var(--j-text-1)' }}>{(selectedProfile.skills || []).length || 0}</strong></div>
+                  <div style={{ padding: 12, borderRadius: 14, background: 'var(--j-surface-2)', border: '1px solid var(--j-border)' }}><span style={{ display: 'block', fontSize: 12, color: 'var(--j-text-3)', marginBottom: 6 }}>Projects</span><strong style={{ color: 'var(--j-text-1)' }}>{(selectedProfile.projects || []).length || 0}</strong></div>
                 </div>
               </div>
             ) : (
-              <p className="status-msg">Select a profile from the list to make it active.</p>
+              <p className="status-msg" style={{ marginTop: 8, color: 'var(--j-text-2)' }}>Select a profile from the list to make it active.</p>
             )}
           </div>
 
-          <div className="profile-card fade-up">
-            <div className="card-heading compact">
+          <div className="profile-card fade-up" style={{ background: 'var(--j-surface)', border: '1px solid var(--j-border)', borderRadius: 16, padding: 20, boxShadow: 'var(--j-shadow-sm)' }}>
+            <div className="card-heading compact" style={{ marginBottom: 16 }}>
               <div>
-                <h3>Saved Profiles</h3>
-                <p>Pick an active profile, edit it, or delete it.</p>
+                <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--j-text-1)' }}>Saved Profiles</h3>
+                <p style={{ color: 'var(--j-text-2)', marginTop: 6 }}>Pick an active profile, edit it, or delete it.</p>
               </div>
             </div>
 
-            <div className="saved-profiles-list">
+            <div className="saved-profiles-list" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {profiles.length === 0 ? (
-                <p className="status-msg">No profiles saved yet. Create one to get started.</p>
+                <p className="status-msg" style={{ color: 'var(--j-text-2)' }}>No profiles saved yet. Create one to get started.</p>
               ) : (
                 profiles.map((item) => (
-                  <div key={item.id} className={`saved-profile-card ${selectedId === item.id ? 'active' : ''}`}>
-                    <div className="sp-header">
-                      <div className="sp-title-row">
+                  <div key={item.id} className={`saved-profile-card ${selectedId === item.id ? 'active' : ''}`} style={{ border: selectedId === item.id ? '1px solid rgba(58,87,232,0.22)' : '1px solid var(--j-border)', borderRadius: 16, padding: 16, background: selectedId === item.id ? 'rgba(58,87,232,0.05)' : 'var(--j-surface-2)' }}>
+                    <div className="sp-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                      <div className="sp-title-row" style={{ display: 'flex', gap: 10, minWidth: 0 }}>
                         <UserCircle size={16} />
-                        <div>
-                          <div className="sp-title">{item.full_name || `Profile #${item.id}`}</div>
-                          <div className="sp-meta">{item.location || item.email || 'Profile details available'}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="sp-title" style={{ fontSize: 14, fontWeight: 800, color: 'var(--j-text-1)' }}>{item.full_name || `Profile #${item.id}`}</div>
+                          <div className="sp-meta" style={{ marginTop: 4, fontSize: 13, color: 'var(--j-text-2)' }}>{item.location || item.email || 'Profile details available'}</div>
                         </div>
                       </div>
-                      {selectedId === item.id ? <span className="sp-badge">Active</span> : null}
+                      {selectedId === item.id ? <span className="sp-badge" style={{ padding: '6px 10px', borderRadius: 999, background: 'rgba(16,185,129,0.10)', color: '#047857', fontWeight: 700 }}>Active</span> : null}
                     </div>
-                    <div className="sp-body">
-                      <p>{item.summary || 'No summary yet.'}</p>
-                      <div className="sp-tags">
-                        <span>{item.profile_completeness || 0}% complete</span>
-                        <span>{(item.skills || []).length || 0} skills</span>
-                        <span>{(item.preferred_job_titles || []).length || 0} target roles</span>
+                    <div className="sp-body" style={{ marginTop: 12 }}>
+                      <p style={{ color: 'var(--j-text-2)', lineHeight: 1.6 }}>{item.summary || 'No summary yet.'}</p>
+                      <div className="sp-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                        <span style={{ padding: '6px 10px', borderRadius: 999, background: 'var(--j-surface)', border: '1px solid var(--j-border)', color: 'var(--j-text-2)', fontSize: 12 }}>{selectedId === item.id && selectedProfile ? getProfileCompleteness(selectedProfile) : getProfileCompleteness(item)}% complete</span>
+                        <span style={{ padding: '6px 10px', borderRadius: 999, background: 'var(--j-surface)', border: '1px solid var(--j-border)', color: 'var(--j-text-2)', fontSize: 12 }}>{(item.skills || []).length || 0} skills</span>
+                        <span style={{ padding: '6px 10px', borderRadius: 999, background: 'var(--j-surface)', border: '1px solid var(--j-border)', color: 'var(--j-text-2)', fontSize: 12 }}>{(item.preferred_job_titles || []).length || 0} target roles</span>
                       </div>
                     </div>
-                    <div className="sp-actions">
+                    <div className="sp-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
                       {selectedId !== item.id ? (
-                        <button className="sel" type="button" onClick={() => handleSelect(item.id)}>
+                        <button type="button" onClick={() => handleSelect(item.id)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 12, border: '1px solid rgba(58,87,232,0.18)', background: 'rgba(58,87,232,0.10)', color: 'var(--j-accent)', fontWeight: 700 }}>
                           <CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-bottom' }} />
                           Set Active
                         </button>
                       ) : null}
-                      <button type="button" onClick={() => loadProfileIntoForm(item.id)}>
+                      <button type="button" onClick={() => loadProfileIntoForm(item.id)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 12, border: '1px solid var(--j-border)', background: 'var(--j-surface)', color: 'var(--j-text-1)', fontWeight: 700 }}>
                         <PencilLine size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-bottom' }} />
                         Edit
                       </button>
-                      <button className="del" type="button" onClick={() => handleDelete(item.id)}>
+                      <button type="button" onClick={() => handleDelete(item.id)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.18)', background: 'rgba(239,68,68,0.08)', color: '#b91c1c', fontWeight: 700 }}>
                         <Trash2 size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'text-bottom' }} />
                         Delete
                       </button>
@@ -625,11 +689,11 @@ export default function Profile() {
             </div>
 
             {totalProfiles > pageSize ? (
-              <div className="pager-ctrl">
-                <span className="pager-muted">Page {pageIndex} of {Math.ceil(totalProfiles / pageSize)}</span>
-                <div className="pager-btns">
-                  <button type="button" disabled={pageIndex === 1} onClick={() => setPageIndex((current) => Math.max(1, current - 1))}>Prev</button>
-                  <button type="button" disabled={pageIndex * pageSize >= totalProfiles} onClick={() => setPageIndex((current) => current + 1)}>Next</button>
+              <div className="pager-ctrl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--j-border)' }}>
+                <span className="pager-muted" style={{ fontSize: 13, color: 'var(--j-text-2)' }}>Page {pageIndex} of {Math.ceil(totalProfiles / pageSize)}</span>
+                <div className="pager-btns" style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" disabled={pageIndex === 1} onClick={() => setPageIndex((current) => Math.max(1, current - 1))} style={{ minHeight: 36, padding: '0 12px', borderRadius: 12, border: '1px solid var(--j-border)', background: 'var(--j-surface)', color: 'var(--j-text-1)' }}>Prev</button>
+                  <button type="button" disabled={pageIndex * pageSize >= totalProfiles} onClick={() => setPageIndex((current) => current + 1)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 12, border: '1px solid var(--j-border)', background: 'var(--j-surface)', color: 'var(--j-text-1)' }}>Next</button>
                 </div>
               </div>
             ) : null}

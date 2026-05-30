@@ -295,14 +295,6 @@ class ResumeVersionOut(ORMBase):
     ats_score: Optional[int]
 
 
-class ScoutRequest(BaseModel):
-    role: str = "software engineer"
-    location: str = "Pakistan"
-    skills: str = ""
-    min_score: int = 75
-    page: int = 1
-
-
 class JobOut(ORMBase):
     id: int
     title: str

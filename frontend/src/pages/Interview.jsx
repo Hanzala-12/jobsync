@@ -91,71 +91,82 @@ function Interview() {
   }
 
   return (
-    <div className="interview-page fade-up">
-      <div className="page-header">
-        <h1>Interview Prediction</h1>
-        <p className="subtitle">Analyze your resume against a job description to predict likely questions.</p>
-      </div>
+    <div className="interview-page fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <section className="app-card" style={{ padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+        <div>
+          <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Interview Prep</p>
+          <h1 style={{ marginTop: 6 }}>Interview Prediction</h1>
+          <p className="subtitle">Analyze your resume against a job description to predict likely questions.</p>
+        </div>
+        <div style={{ padding: '10px 14px', borderRadius: 14, background: 'var(--j-surface)', border: '1px solid var(--j-border)', color: 'var(--j-text-2)', fontWeight: 700 }}>Practice before you apply</div>
+      </section>
 
-      <section className="panel-card fade-up">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+      <section className="panel-card fade-up" style={{ background: 'var(--j-surface)', border: '1px solid var(--j-border)', borderRadius: 18, padding: 24, boxShadow: 'var(--j-shadow-sm)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Target size={18} color="var(--j-text-2)"/>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--j-text-1)', margin: 0 }}>Prediction Engine</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--j-text-1)', margin: 0 }}>Prediction Engine</h3>
         </div>
 
-        <span className="field-label">YOUR RESUME / BACKGROUND</span>
-        <textarea
-          className="text-area"
-          rows={7}
-          value={resumeText}
-          onChange={(event) => setResumeText(event.target.value)}
-          placeholder="Paste resume text or load from versions below..."
-          style={{ marginBottom: 12 }}
-        />
-        
-        {versions.length > 0 && (
-          <select
-            className="text-area"
-            style={{ padding: '0 12px', height: 44 }}
-            onChange={(event) => {
-              const selected = versions.find((version) => String(version.id) === event.target.value)
-              if (selected) {
-                setResumeText(selected.content)
-                localStorage.setItem('jobsync_resume_text', selected.content)
-              }
-            }}
-            defaultValue=""
-          >
-            <option value="">Load from saved tailored versions...</option>
-            {versions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
-          </select>
-        )}
-        
-        <span className="field-label">TARGET JOB DESCRIPTION</span>
-        <textarea
-          className="text-area"
-          rows={7}
-          value={jobDescription}
-          onChange={(event) => setJobDescription(event.target.value)}
-          placeholder="Paste job description..."
-        />
-        
-        <div className="inline-inputs">
-          <div style={{ flex: 1 }}>
-            <span className="field-label">COMPANY</span>
-            <input value={company} onChange={(event) => setCompany(event.target.value)} placeholder="e.g. Acme Corp" />
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div>
+            <span className="field-label" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Your Resume / Background</span>
+            <textarea
+              className="text-area"
+              rows={7}
+              value={resumeText}
+              onChange={(event) => setResumeText(event.target.value)}
+              placeholder="Paste resume text or load from versions below..."
+              style={{ marginTop: 10, borderRadius: 16 }}
+            />
           </div>
-          <div style={{ flex: 1 }}>
-            <span className="field-label">ROLE</span>
-            <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="e.g. Senior Dev" />
+
+          {versions.length > 0 && (
+            <select
+              className="text-area"
+              style={{ padding: '0 12px', height: 46, borderRadius: 14 }}
+              onChange={(event) => {
+                const selected = versions.find((version) => String(version.id) === event.target.value)
+                if (selected) {
+                  setResumeText(selected.content)
+                  localStorage.setItem('jobsync_resume_text', selected.content)
+                }
+              }}
+              defaultValue=""
+            >
+              <option value="">Load from saved tailored versions...</option>
+              {versions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
+            </select>
+          )}
+
+          <div>
+            <span className="field-label" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Target Job Description</span>
+            <textarea
+              className="text-area"
+              rows={7}
+              value={jobDescription}
+              onChange={(event) => setJobDescription(event.target.value)}
+              placeholder="Paste job description..."
+              style={{ marginTop: 10, borderRadius: 16 }}
+            />
+          </div>
+
+          <div className="inline-inputs" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <span className="field-label" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Company</span>
+              <input value={company} onChange={(event) => setCompany(event.target.value)} placeholder="e.g. Acme Corp" style={{ marginTop: 10, width: '100%', minHeight: 46, borderRadius: 14, border: '1px solid var(--j-border)', background: 'var(--j-surface-2)', color: 'var(--j-text-1)', padding: '0 12px' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <span className="field-label" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>Role</span>
+              <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="e.g. Senior Dev" style={{ marginTop: 10, width: '100%', minHeight: 46, borderRadius: 14, border: '1px solid var(--j-border)', background: 'var(--j-surface-2)', color: 'var(--j-text-1)', padding: '0 12px' }} />
+            </div>
           </div>
         </div>
-        
+
         <Button onClick={predict} loading={loading} disabled={!resumeText || !jobDescription}>Predict My Questions</Button>
       </section>
 
       {questions.length > 0 && (
-        <div className="fade-up">
+        <div className="fade-up" style={{ display: 'grid', gap: 16 }}>
           {section('TECHNICAL & ROLE-SPECIFIC', grouped.technical)}
           {section('BEHAVIORAL & CULTURE FIT', grouped.behavioral)}
           {section('WEAKNESS / VULNERABILITY QUESTIONS', grouped.gap, 'gap')}

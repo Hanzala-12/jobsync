@@ -332,63 +332,109 @@ function Jobs() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const getScoreTone = (score) => {
+    if (score >= 70) {
+      return { background: 'rgba(16, 185, 129, 0.10)', color: '#047857', borderColor: 'rgba(16, 185, 129, 0.18)' }
+    }
+    if (score >= 40) {
+      return { background: 'rgba(245, 158, 11, 0.12)', color: '#b45309', borderColor: 'rgba(245, 158, 11, 0.20)' }
+    }
+    return { background: 'rgba(239, 68, 68, 0.10)', color: '#b91c1c', borderColor: 'rgba(239, 68, 68, 0.18)' }
+  }
+
+  const getScoreLabel = (score) => {
+    if (score >= 70) return 'High'
+    if (score >= 40) return 'Medium'
+    return 'Low'
+  }
+
   // Intentionally do not auto-search on mount.
   // Users should trigger search explicitly to avoid unexpected job loads.
 
   return (
-    <div className="jobs-page">
+    <div className="jobs-page fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div className="page-header">
-        <h1>Jobs</h1>
+        <p style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>
+          Job search
+        </p>
+        <h1 style={{ marginTop: '6px' }}>Jobs</h1>
         <p className="subtitle">Search and save jobs with location-first filters.</p>
       </div>
 
-      <div className="search-box">
-        <div className="search-bar">
-          <Search className="search-icon" size={18} />
-          <input
-            value={query}
-            onChange={(event) => handleQueryChange(event.target.value)}
-            onFocus={() => query.length > 0 && setShowSuggestions(true)}
-            placeholder="Search software engineer, data analyst, frontend..."
-          />
-          <Button onClick={search} loading={isSearching}>Search</Button>
-          
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="autocomplete-dropdown">
-              {suggestions.map((suggestion, index) => (
-                <div key={index} className="autocomplete-item" onClick={() => selectSuggestion(suggestion)}>
-                  {suggestion}
+      <section className="app-card" style={{ padding: '22px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ position: 'relative', display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+              <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--j-text-3)', pointerEvents: 'none' }} />
+              <input
+                value={query}
+                onChange={(event) => handleQueryChange(event.target.value)}
+                onFocus={() => query.length > 0 && setShowSuggestions(true)}
+                placeholder="Search jobs by title, company, or keyword"
+                style={{
+                  width: '100%',
+                  minHeight: '54px',
+                  padding: '0 16px 0 46px',
+                  borderRadius: '16px',
+                  border: '1px solid var(--j-border)',
+                  background: 'var(--j-surface)',
+                  color: 'var(--j-text-1)',
+                  outline: 'none',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.72)',
+                }}
+              />
+
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="autocomplete-dropdown" style={{ left: 0, right: 0, top: 'calc(100% + 8px)', borderRadius: '16px', boxShadow: 'var(--j-shadow-md)' }}>
+                  {suggestions.map((suggestion, index) => (
+                    <div key={index} className="autocomplete-item" onClick={() => selectSuggestion(suggestion)}>
+                      {suggestion}
+                    </div>
+                  ))}
                 </div>
+              )}
+            </div>
+
+            <Button onClick={search} loading={isSearching}>Search</Button>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '14px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {LOCATION_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setLocation(option)}
+                  style={{
+                    minHeight: '36px',
+                    padding: '0 14px',
+                    borderRadius: '999px',
+                    border: location === option ? '1px solid rgba(58,87,232,0.24)' : '1px solid var(--j-border)',
+                    background: location === option ? 'rgba(58,87,232,0.10)' : 'var(--j-surface-2)',
+                    color: location === option ? 'var(--j-accent)' : 'var(--j-text-2)',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {option}
+                </button>
               ))}
             </div>
-          )}
-        </div>
 
-        <div className="filters-row">
-          <div className="location-pills">
-            {LOCATION_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`location-pill ${location === option ? 'active' : ''}`}
-                onClick={() => setLocation(option)}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <div className="checkbox-filters">
-            <label>
-              <input type="checkbox" checked={pakistanOnly} onChange={(e) => { setPakistanOnly(e.target.checked); if (e.target.checked) setRemoteOnly(false); }} />
-              Pakistan only
-            </label>
-            <label>
-              <input type="checkbox" checked={remoteOnly} onChange={(e) => { setRemoteOnly(e.target.checked); if (e.target.checked) setPakistanOnly(false); }} />
-              Remote only
-            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '999px', border: '1px solid var(--j-border)', background: 'var(--j-surface-2)', color: 'var(--j-text-2)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                <input type="checkbox" checked={pakistanOnly} onChange={(e) => { setPakistanOnly(e.target.checked); if (e.target.checked) setRemoteOnly(false); }} />
+                Pakistan only
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '999px', border: '1px solid var(--j-border)', background: 'var(--j-surface-2)', color: 'var(--j-text-2)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                <input type="checkbox" checked={remoteOnly} onChange={(e) => { setRemoteOnly(e.target.checked); if (e.target.checked) setPakistanOnly(false); }} />
+                Remote only
+              </label>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {error && <p className="status-message error">{error}</p>}
       {!profileExists && <p className="status-message warning">⚠️ Please complete your profile first — Match Me and Resume will prompt you to finish it.</p>}
@@ -424,28 +470,63 @@ function Jobs() {
         </div>
       )}
 
-      <div className="jobs-grid">
+      <div className="jobs-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
         {jobs.map((job, index) => (
-          <article key={`${job.id || index}-${job.title}`} className="job-card fade-up">
-            <div className="card-top">
-              <span className="card-company">{job.company}</span>
-              <span className="card-source">{sourceBadge(job.source)}</span>
+          <article
+            key={`${job.id || index}-${job.title}`}
+            className="job-card fade-up"
+            style={{
+              background: 'var(--j-surface)',
+              border: '1px solid var(--j-border)',
+              borderRadius: '22px',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              boxShadow: 'var(--j-shadow-sm)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ display: 'inline-flex', fontSize: '11px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--j-text-3)' }}>
+                  {sourceBadge(job.source)}
+                </span>
+                <h3 style={{ marginTop: '8px', fontSize: '17px', lineHeight: 1.25, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--j-text-1)' }}>
+                  {job.title}
+                </h3>
+                <p style={{ marginTop: '4px', fontSize: '13px', color: 'var(--j-text-2)', fontWeight: 600 }}>
+                  {job.company}
+                </p>
+              </div>
+
+              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                {(() => {
+                  const score = Number(job.match_percentage ?? job.match_score ?? job.score ?? 0)
+                  const tone = getScoreTone(score)
+                  return (
+                    <span className="status-pill" style={{ ...tone, minWidth: '72px', justifyContent: 'center' }}>
+                      {score > 0 ? `${Math.round(score)}% ${getScoreLabel(score)}` : 'New'}
+                    </span>
+                  )
+                })()}
+                {resolveExternalJobUrl(job) ? (
+                  <a href={resolveExternalJobUrl(job)} target="_blank" rel="noreferrer" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--j-accent)' }}>
+                    View role
+                  </a>
+                ) : null}
+              </div>
             </div>
-            
-            <h3 className="card-title">{job.title}</h3>
-            <div className="card-location"><MapPin size={12} /> {job.location || 'Remote'}</div>
-            
-            <div className="card-desc-wrap">
-              <p className="card-desc">{job.description || 'No description available.'}</p>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--j-text-2)', fontSize: '13px' }}>
+              <MapPin size={14} />
+              <span>{job.location || 'Remote'}</span>
             </div>
-            
-            <div className="card-actions">
-              {resolveExternalJobUrl(job) ? (
-                <a href={resolveExternalJobUrl(job)} target="_blank" rel="noreferrer" className="action-view">View <ExternalLink size={12} /></a>
-              ) : (
-                <span className="action-view disabled">View <ExternalLink size={12} /></span>
-              )}
-              
+
+            <div style={{ flex: 1, color: 'var(--j-text-2)', fontSize: '13px', lineHeight: 1.6, maxHeight: '96px', overflow: 'hidden' }}>
+              {job.description || 'No description available.'}
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: 'auto', alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => {
@@ -455,7 +536,18 @@ function Jobs() {
                   }
                   openMatch(job)
                 }}
-                className="action-btn"
+                style={{
+                  minHeight: '42px',
+                  padding: '0 15px',
+                  borderRadius: '14px',
+                  border: '0',
+                  background: 'linear-gradient(135deg, var(--j-accent), var(--j-accent-2))',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor: profileExists ? 'pointer' : 'not-allowed',
+                  opacity: profileExists ? 1 : 0.55,
+                  boxShadow: '0 12px 24px rgba(58,87,232,0.18)',
+                }}
                 disabled={!profileExists}
                 title={profileExists ? 'Match your profile to this job' : 'Complete your profile to use Match Me'}
               >
@@ -468,31 +560,45 @@ function Jobs() {
                     alert('Please complete your profile first')
                     return
                   }
-                  navigate('/resume', { state: { tab: 'rewrite', jobDescription: job.description } })
-                }}
-                className="action-btn"
-                disabled={!profileExists}
-                title={profileExists ? 'Rewrite your resume for this job' : 'Complete your profile to use Resume'}
-              >
-                Resume
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!profileExists) {
-                    alert('Please complete your profile first')
-                    return
-                  }
                   openResumeBuilder(job)
                 }}
-                className="action-btn"
+                style={{
+                  minHeight: '42px',
+                  padding: '0 15px',
+                  borderRadius: '14px',
+                  border: '1px solid var(--j-border)',
+                  background: 'rgba(255,255,255,0.96)',
+                  color: 'var(--j-text-1)',
+                  fontWeight: 700,
+                  cursor: profileExists ? 'pointer' : 'not-allowed',
+                  opacity: profileExists ? 1 : 0.55,
+                }}
                 disabled={!profileExists}
                 title={profileExists ? 'Generate a tailored resume for this job' : 'Complete your profile to use Tailor Resume'}
               >
                 Tailor Resume
               </button>
-              <button type="button" onClick={() => openSalary(job, index)} className="action-btn">$ Est.</button>
-              <button type="button" onClick={() => saveToTracker(job)} className="action-save">Save</button>
+              <button
+                type="button"
+                onClick={() => saveToTracker(job)}
+                aria-label="Save job"
+                title="Save job"
+                style={{
+                  marginLeft: 'auto',
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '14px',
+                  border: '1px solid var(--j-border)',
+                  background: 'rgba(255,255,255,0.96)',
+                  color: 'var(--j-accent)',
+                  fontSize: '18px',
+                  lineHeight: 1,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                ♥
+              </button>
             </div>
 
             {salaryCard === index && salaryData && (
@@ -506,7 +612,7 @@ function Jobs() {
         ))}
       </div>
 
-      <div className="modal-actions" style={{ marginTop: 16 }}>
+      <div className="modal-actions" style={{ marginTop: 16, display: 'flex', gap: '12px', justifyContent: 'center' }}>
         <Button variant="secondary" disabled={page <= 1 || isSearching} onClick={previousPage}>Previous</Button>
         <Button variant="secondary" disabled={!hasMore || isSearching} onClick={loadMore}>Load More</Button>
       </div>

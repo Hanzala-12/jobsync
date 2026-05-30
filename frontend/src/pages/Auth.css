@@ -1,13 +1,17 @@
 .auth-shell {
   display: flex;
   min-height: 100vh;
-  background-color: var(--j-surface);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
 }
 
 .auth-hero {
   width: 40%;
-  background: #0f0f0f;
-  color: white;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 38%),
+    linear-gradient(160deg, #111827 0%, #1f3b73 58%, #2f6fed 100%);
+  color: #f8fafc;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -28,8 +32,8 @@
 .hero-mark {
   width: 40px;
   height: 40px;
-  background: #ffffff;
-  color: #0f0f0f;
+  background: rgba(255, 255, 255, 0.96);
+  color: #1f3b73;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -62,7 +66,7 @@
   align-items: center;
   gap: 12px;
   font-size: 16px;
-  color: #a3a3a3;
+  color: rgba(248, 250, 252, 0.82);
 }
 
 .hero-features span {
@@ -74,13 +78,27 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+  position: relative;
   padding: 40px;
+}
+
+.auth-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(47, 111, 237, 0.08), transparent 32%),
+    radial-gradient(circle at 80% 0%, rgba(31, 59, 115, 0.06), transparent 26%);
 }
 
 .auth-card {
   width: 100%;
   max-width: 380px;
+  position: relative;
+  z-index: 1;
 }
 
 .auth-card h1 {
@@ -128,7 +146,7 @@
 
 .auth-form input:focus {
   border-color: var(--j-accent);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
   outline: none;
 }
 
