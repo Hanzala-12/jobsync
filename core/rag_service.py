@@ -16,7 +16,13 @@ except Exception:  # pragma: no cover - optional dependency fallback
     SentenceTransformer = None  # type: ignore[assignment]
     _HAS_SENTENCE_TRANSFORMERS = False
 
-import chromadb
+try:
+    import chromadb
+    _HAS_CHROMADB = True
+except Exception:  # pragma: no cover - optional dependency fallback
+    chromadb = None  # type: ignore[assignment]
+    _HAS_CHROMADB = False
+
 from core.llm_provider import LLMProvider, is_fallback_mode_enabled
 
 load_dotenv()
@@ -77,6 +83,9 @@ def get_embedding_model() -> SentenceTransformer:
 
 def get_chroma_collection(collection_name: str = DEFAULT_COLLECTION_NAME, persist_dir: str = DEFAULT_CHROMA_DIR):
     global _chroma_client, _collection
+    if not _HAS_CHROMADB:
+        raise RuntimeError("chromadb is unavailable in this environment")
+
     if _collection is not None:
         return _collection
 
@@ -100,7 +109,11 @@ def get_openrouter_client():
 
 
 def _query_collection_with_embedding(query_embedding: List[float], k: int, where: Optional[Dict[str, Any]]) -> List[RetrievedChunk]:
-    collection = get_chroma_collection()
+    try:
+        collection = get_chroma_collection()
+    except RuntimeError:
+        return []
+
     query_kwargs: Dict[str, Any] = {"query_embeddings": [query_embedding], "n_results": k}
     if where:
         query_kwargs["where"] = where
