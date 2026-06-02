@@ -83,3 +83,4 @@ frontend/.env.local
 # Root-level npm artifacts
 node_modules/
 .vercel
+uv.lock

@@ -1,24 +1,11 @@
-# Core dependencies for app.py
+# Minimal runtime dependencies for the deployed backend
 python-dotenv==1.0.1
 groq==0.4.2
 openai>=1.0.0
-
-# PDF support (optional but recommended)
-# PyMuPDF is optional; PDF extraction gracefully falls back when unavailable.
-
-# PDF export and generation
 fpdf==1.7.2
 reportlab==4.0.7
-
-# Web scraping for URL ingestion
 beautifulsoup4==4.12.2
-lxml==4.9.3
-pandas==2.2.2
-datasets>=2.19.0
-spacy>=3.7.0
-scikit-learn>=1.3.0
-
-# Existing JobSync backend dependencies (for web API - optional)
+lxml>=4.9.4,<5.0.0
 fastapi==0.110.0
 uvicorn[standard]==0.27.1
 sqlalchemy==2.0.27
@@ -31,19 +18,7 @@ pypdf==3.16.0
 docx2txt==0.8
 alembic>=1.13.0
 tenacity>=8.2.0
-chromadb>=0.4.0
-sentence-transformers>=2.2.2
-rank_bm25>=0.2.2
-psycopg2-binary>=2.9.0
-supabase>=2.0.0
 email-validator>=2.0.0
-celery[redis]>=5.4.0
-redis>=5.0.0
 python-json-logger>=2.0.7
 prometheus-client>=0.20.0
 cryptography>=40.0
-
-# Testing
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
-httpx>=0.27.0
